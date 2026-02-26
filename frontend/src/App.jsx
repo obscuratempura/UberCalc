@@ -956,6 +956,9 @@ export default function App() {
                   <button type="button" onClick={handleClear}>
                     CLEAR
                   </button>
+                  <button type="button" onClick={handleOpenDonate} className="donate-desktop">
+                    DONATE
+                  </button>
                 </div>
               </div>
 
@@ -973,7 +976,7 @@ export default function App() {
             Voice Tip: State your pay, minutes, then miles. Example: " 7 dollars, 15 minutes, 6 miles."
           </div>
 
-          <div className="donate-row">
+          <div className="donate-row donate-mobile">
             <button type="button" onClick={handleOpenDonate} className="donate-launch">
               DONATE
             </button>

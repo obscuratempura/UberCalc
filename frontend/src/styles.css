@@ -148,6 +148,10 @@ button:disabled {
   gap: 10px;
 }
 
+.donate-desktop {
+  display: inline-flex;
+}
+
 .button-bar button {
   min-width: 140px;
 }
@@ -168,6 +172,10 @@ button:disabled {
 .donate-row {
   display: flex;
   justify-content: center;
+}
+
+.donate-mobile {
+  display: none;
 }
 
 .donate-launch {
@@ -352,6 +360,14 @@ button:disabled {
 
   .button-bar button {
     width: 100%;
+  }
+
+  .donate-desktop {
+    display: none;
+  }
+
+  .donate-mobile {
+    display: flex;
   }
 
   .prefs-grid {
