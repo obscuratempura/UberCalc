@@ -106,6 +106,10 @@ function normalizeSpeech(value) {
     .trim();
 }
 
+function canonicalSpeechSegment(value) {
+  return normalizeSpeech(value).replace(/\s+/g, " ").trim();
+}
+
 function isNumberWord(token) {
   return token in SMALL_NUMBERS || token in TENS_NUMBERS || token === "hundred" || token === "thousand";
 }
@@ -737,10 +741,45 @@ export default function App() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
-    let finalTranscript = "";
+    const finalSegments = [];
+
+    function appendFinalSegment(segment) {
+      const trimmedSegment = (segment || "").trim();
+      if (!trimmedSegment) {
+        return;
+      }
+
+      const nextCanonical = canonicalSpeechSegment(trimmedSegment);
+      if (!nextCanonical) {
+        return;
+      }
+
+      const lastSegment = finalSegments[finalSegments.length - 1];
+      const lastCanonical = lastSegment ? canonicalSpeechSegment(lastSegment) : "";
+
+      if (lastCanonical === nextCanonical) {
+        return;
+      }
+
+      if (lastCanonical && nextCanonical.includes(lastCanonical)) {
+        finalSegments[finalSegments.length - 1] = trimmedSegment;
+        return;
+      }
+
+      if (lastCanonical && lastCanonical.includes(nextCanonical)) {
+        return;
+      }
+
+      const hasExistingMatch = finalSegments.some((entry) => canonicalSpeechSegment(entry) === nextCanonical);
+      if (hasExistingMatch) {
+        return;
+      }
+
+      finalSegments.push(trimmedSegment);
+    }
 
     setPay("");
     setMinutesDigits("");
@@ -753,15 +792,16 @@ export default function App() {
     recognition.onresult = (event) => {
       let interimTranscript = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const chunk = event.results[index][0].transcript;
+        const chunk = (event.results[index][0].transcript || "").trim();
         if (event.results[index].isFinal) {
-          finalTranscript = `${finalTranscript} ${chunk}`.trim();
+          appendFinalSegment(chunk);
         } else {
-          interimTranscript = `${interimTranscript} ${chunk}`.trim();
+          interimTranscript = chunk;
         }
       }
 
-      const currentTranscript = `${finalTranscript} ${interimTranscript}`.trim();
+      const combinedFinal = finalSegments.join(" ").trim();
+      const currentTranscript = `${combinedFinal} ${interimTranscript}`.trim();
       if (currentTranscript) {
         voiceTranscriptRef.current = currentTranscript;
         setHeardText(currentTranscript);
@@ -794,7 +834,7 @@ export default function App() {
       clearVoiceTimer();
       setIsListening(false);
 
-      const transcript = finalTranscript.trim() || (voiceTranscriptRef.current || "").trim();
+      const transcript = finalSegments.join(" ").trim() || (voiceTranscriptRef.current || "").trim();
       if (!transcript) {
         return;
       }
