@@ -892,9 +892,6 @@ export default function App() {
       <section className="window" aria-label="Order Decision Calculator">
         <div className="title-bar">
           <span>Order Decision Calculator</span>
-          <button type="button" className="title-close" aria-label="Close">
-            ×
-          </button>
         </div>
 
         <div className="window-body">

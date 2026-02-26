@@ -32,20 +32,10 @@ body {
   min-height: 32px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   background: #000080;
   color: #fff;
   font-weight: 700;
   padding: 4px 6px;
-}
-
-.title-close {
-  width: 24px;
-  height: 20px;
-  min-height: 20px;
-  padding: 0;
-  font-size: 14px;
-  line-height: 1;
 }
 
 .window-body {
