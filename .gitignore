@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+backend/orders.db
+frontend/node_modules/
+frontend/dist/
