@@ -853,6 +853,8 @@ export default function App() {
         return;
       }
 
+      setHeardText(`$${parsed.pay} ${parsed.minutes} minutes ${parsed.miles} miles`);
+
       fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
     };
 
