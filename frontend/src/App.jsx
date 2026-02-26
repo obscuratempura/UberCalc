@@ -758,7 +758,6 @@ export default function App() {
     setPay(sanitizeDecimalInput(String(payValue), PAY_LIMIT));
     setMinutesDigits(sanitizeIntegerInput(String(Math.round(minutesValue)), MINUTES_LIMIT));
     setMiles(sanitizeDecimalInput(String(milesValue), MILES_LIMIT));
-    window.setTimeout(() => milesInputRef.current?.focus(), 0);
   }
 
   function clearVoiceTimer() {
