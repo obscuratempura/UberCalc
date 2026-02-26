@@ -470,6 +470,47 @@ function parseVoiceOrderFallbackFromChunks(chunks) {
   return { pay, minutes, miles };
 }
 
+function recoverMergedPayMinutesFromTranscript(normalized, pay, minutes, miles) {
+  if (!Number.isFinite(pay) || pay <= 0 || !Number.isFinite(miles) || miles <= 0) {
+    return { pay, minutes };
+  }
+
+  const dollars = Math.trunc(pay);
+  const cents = Math.round((pay - dollars) * 100);
+  if (cents <= 0 || cents >= 100) {
+    return { pay, minutes };
+  }
+
+  const minutesMissingOrSuspicious = !Number.isFinite(minutes) || minutes <= 0 || minutes === dollars;
+  if (!minutesMissingOrSuspicious) {
+    return { pay, minutes };
+  }
+
+  const mergedPattern =
+    /\b(\d+)\.(\d{1,2})\s+(\d{1,2})(?=\s+(?:and\s+)?\d+(?:\.\d+)?\s+(?:mile|miles|mi|kilometer|kilometers|km|kms|ki|kilo|kilos)\b)/;
+  const match = normalized.match(mergedPattern);
+  if (!match) {
+    return { pay, minutes };
+  }
+
+  const matchedDollars = Number(match[1]);
+  const matchedCents = Number(match[2]);
+  const matchedMinutes = Number(match[3]);
+
+  if (!Number.isFinite(matchedDollars) || !Number.isFinite(matchedCents) || !Number.isFinite(matchedMinutes)) {
+    return { pay, minutes };
+  }
+
+  if (matchedDollars !== dollars || matchedCents !== matchedMinutes) {
+    return { pay, minutes };
+  }
+
+  return {
+    pay: matchedDollars,
+    minutes: matchedMinutes,
+  };
+}
+
 function parseVoiceOrder(transcript) {
   const normalized = normalizeSpeech(transcript);
   if (!normalized) {
@@ -566,6 +607,10 @@ function parseVoiceOrder(transcript) {
       pay = parsePay(firstUnused.text);
     }
   }
+
+  const recovered = recoverMergedPayMinutesFromTranscript(normalized, pay, minutes, miles);
+  pay = recovered.pay;
+  minutes = recovered.minutes;
 
   const hasPrimaryParse = Number.isFinite(pay) && pay > 0 && Number.isFinite(minutes) && minutes > 0 && Number.isFinite(miles) && miles > 0;
   if (hasPrimaryParse) {
