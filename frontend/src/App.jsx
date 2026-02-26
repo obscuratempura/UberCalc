@@ -302,32 +302,16 @@ function parsePay(phrase) {
     return NaN;
   }
 
-  const hasExplicitCents = /\bcent(s)?\b/.test(cleaned);
-  const hasExplicitPoint = /\bpoint\b/.test(cleaned);
-
-  const fractional = parseFractionalExpression(cleaned);
-  if (Number.isFinite(fractional) && (hasExplicitCents || hasExplicitPoint)) {
-    return fractional;
-  }
-
   const payTokens = cleaned
     .split(" ")
     .filter(Boolean)
     .filter((token) => !["pay", "payout", "is", "for", "about", "around", "dollar", "dollars", "buck", "bucks", "cent", "cents"].includes(token));
 
   const payChunks = collectNumberChunks(payTokens);
-  if (hasExplicitCents && payChunks.length >= 2) {
-    const dollars = parseGeneralNumber(payChunks[0].text);
-    const cents = parseGeneralNumber(payChunks[1].text);
-    if (Number.isFinite(dollars) && Number.isFinite(cents) && cents >= 0 && cents < 100) {
-      return dollars + cents / 100;
-    }
-  }
-
   if (payChunks.length >= 1) {
     const parsedFirst = parseGeneralNumber(payChunks[0].text);
     if (Number.isFinite(parsedFirst)) {
-      return parsedFirst;
+      return Math.trunc(parsedFirst);
     }
   }
 
@@ -337,27 +321,12 @@ function parsePay(phrase) {
     if (!Number.isFinite(numericValue)) {
       return NaN;
     }
-    if (hasExplicitCents || hasExplicitPoint) {
-      return numericValue;
-    }
     return Math.trunc(numericValue);
-  }
-
-  if (hasExplicitPoint) {
-    return parseGeneralNumber(cleaned);
   }
 
   const tokens = cleaned.split(" ").filter(Boolean);
   if (!tokens.length) {
     return NaN;
-  }
-
-  if (hasExplicitCents && tokens.length >= 2) {
-    const left = parseWordInteger(tokens.slice(0, -1).join(" "));
-    const right = parseWordInteger(tokens[tokens.length - 1]);
-    if (Number.isFinite(left) && Number.isFinite(right) && right >= 10 && right < 100) {
-      return left + right / 100;
-    }
   }
 
   const parsedInteger = parseWordInteger(cleaned);
@@ -407,19 +376,12 @@ function extractAmountTokensBeforeUnit(tokens, unitIndex, mode) {
   const prev = numberTokens[numberTokens.length - 2];
   const prev2 = numberTokens[numberTokens.length - 3];
 
-  if (mode !== "minutes" && prev2 && prev === "point" && isNumericToken(prev2) && isSingleDigitToken(last)) {
+  if (mode !== "pay" && mode !== "minutes" && prev2 && prev === "point" && isNumericToken(prev2) && isSingleDigitToken(last)) {
     return [prev2, prev, last];
   }
 
   if (prev && isTensToken(prev) && (last in SMALL_NUMBERS || /^\d$/.test(last))) {
     return [prev, last];
-  }
-
-  if (mode === "pay" && prev && isNumericToken(prev)) {
-    const centsValue = parseGeneralNumber(last);
-    if (Number.isFinite(centsValue) && centsValue >= 10 && centsValue < 100) {
-      return [prev, last];
-    }
   }
 
   return [last];
@@ -561,106 +523,44 @@ function parseVoiceOrder(transcript) {
   }
 
   const tokens = normalized.split(" ").filter(Boolean);
-  const hintedMinutesUnitIndex = tokens.findIndex((token) => MINUTE_UNIT_TOKENS.includes(token));
-  const hintedDistanceUnitIndex = tokens.findIndex((token) => DISTANCE_UNIT_TOKENS.includes(token));
+  const minutesUnitIndex = tokens.findIndex((token) => MINUTE_UNIT_TOKENS.includes(token));
+  const distanceUnitIndex = tokens.findIndex((token) => DISTANCE_UNIT_TOKENS.includes(token));
+  const dollarUnitIndex = tokens.findIndex((token) => ["dollar", "dollars", "buck", "bucks"].includes(token));
+  const payKeywordIndex = tokens.findIndex((token) => ["pay", "payout"].includes(token));
 
-  if (hintedMinutesUnitIndex >= 0 && hintedDistanceUnitIndex >= 0) {
-    const minutesTokens = extractAmountTokensBeforeUnit(tokens, hintedMinutesUnitIndex, "minutes");
-    const distanceTokens = extractAmountTokensBeforeUnit(tokens, hintedDistanceUnitIndex, "miles");
-
-    const minutes = parseGeneralNumber(minutesTokens.join(" "));
-    const miles = parseGeneralNumber(distanceTokens.join(" "));
-
-    const firstUnitIndex = Math.min(hintedMinutesUnitIndex, hintedDistanceUnitIndex);
-    const payLeadTokens = sanitizeNumberTokens(tokens.slice(0, firstUnitIndex));
-    let pay = parsePay(payLeadTokens.join(" "));
-
-    if (!Number.isFinite(pay) || pay <= 0) {
-      const payKeywordIndex = tokens.findIndex((token) => PAY_HINT_TOKENS.includes(token));
-      if (payKeywordIndex >= 0) {
-        const payTokens = extractAmountTokensBeforeUnit(tokens, payKeywordIndex, "pay");
-        pay = parsePay(payTokens.join(" "));
-      }
-    }
-
-    if (Number.isFinite(pay) && pay > 0 && Number.isFinite(minutes) && minutes > 0 && Number.isFinite(miles) && miles > 0) {
-      return normalizeVoiceResult({ pay, minutes, miles });
-    }
-  }
-
-  const chunks = collectNumberChunks(tokens);
-  if (!chunks.length) {
+  if (minutesUnitIndex < 0 || distanceUnitIndex < 0 || (dollarUnitIndex < 0 && payKeywordIndex < 0)) {
     return null;
   }
 
-  const usedChunkIndexes = new Set();
-
-  let minutes = NaN;
-  const minutesUnitIndex = tokens.findIndex((token) => MINUTE_UNIT_TOKENS.includes(token));
-  if (minutesUnitIndex >= 0) {
-    const minutesChunk = chooseChunkBeforeIndex(chunks, minutesUnitIndex, usedChunkIndexes);
-    if (minutesChunk) {
-      minutes = parseGeneralNumber(minutesChunk.chunk.text);
-      if (Number.isFinite(minutes) && minutes > 0) {
-        usedChunkIndexes.add(minutesChunk.index);
-      }
-    }
-  }
-
-  let miles = NaN;
-  const distanceUnitIndex = tokens.findIndex((token) => DISTANCE_UNIT_TOKENS.includes(token));
-  if (distanceUnitIndex >= 0) {
-    const distanceChunk = chooseChunkBeforeIndex(chunks, distanceUnitIndex, usedChunkIndexes);
-    if (distanceChunk) {
-      miles = parseGeneralNumber(distanceChunk.chunk.text);
-      if (Number.isFinite(miles) && miles > 0) {
-        usedChunkIndexes.add(distanceChunk.index);
-      }
-    }
-  }
+  const minutesTokens = extractAmountTokensBeforeUnit(tokens, minutesUnitIndex, "minutes");
+  const distanceTokens = extractAmountTokensBeforeUnit(tokens, distanceUnitIndex, "miles");
+  const minutes = parseGeneralNumber(minutesTokens.join(" "));
+  const miles = parseGeneralNumber(distanceTokens.join(" "));
 
   let pay = NaN;
-  const payKeywordIndex = tokens.findIndex((token) => PAY_HINT_TOKENS.includes(token));
-  if (payKeywordIndex >= 0) {
-    const payChunk = chooseChunkNearKeyword(chunks, payKeywordIndex, usedChunkIndexes);
-    if (payChunk) {
-      pay = parsePay(payChunk.chunk.text);
-      if (Number.isFinite(pay) && pay > 0) {
-        usedChunkIndexes.add(payChunk.index);
-      }
+  if (dollarUnitIndex >= 0) {
+    const payTokens = extractAmountTokensBeforeUnit(tokens, dollarUnitIndex, "pay");
+    pay = parsePay(payTokens.join(" "));
+  }
+
+  if ((!Number.isFinite(pay) || pay <= 0) && payKeywordIndex >= 0) {
+    const nextUnitAfterPay = [minutesUnitIndex, distanceUnitIndex]
+      .filter((index) => index > payKeywordIndex)
+      .sort((left, right) => left - right)[0];
+
+    const paySearchEnd = Number.isFinite(nextUnitAfterPay) ? nextUnitAfterPay : tokens.length;
+    const paySearchTokens = tokens.slice(payKeywordIndex + 1, paySearchEnd);
+    const payChunks = collectNumberChunks(paySearchTokens);
+    if (payChunks.length) {
+      pay = parsePay(payChunks[0].text);
     }
   }
 
-  if (!Number.isFinite(pay) || pay <= 0) {
-    const dollarKeywordIndex = tokens.findIndex((token) => ["dollar", "dollars", "buck", "bucks", "cent", "cents"].includes(token));
-    if (dollarKeywordIndex >= 0) {
-      const dollarChunk = chooseChunkBeforeIndex(chunks, dollarKeywordIndex, usedChunkIndexes);
-      if (dollarChunk) {
-        pay = parsePay(dollarChunk.chunk.text);
-        if (Number.isFinite(pay) && pay > 0) {
-          usedChunkIndexes.add(dollarChunk.index);
-        }
-      }
-    }
+  if (!Number.isFinite(pay) || pay <= 0 || !Number.isFinite(minutes) || minutes <= 0 || !Number.isFinite(miles) || miles <= 0) {
+    return null;
   }
 
-  if (!Number.isFinite(pay) || pay <= 0) {
-    const firstUnused = chunks.find((_, index) => !usedChunkIndexes.has(index));
-    if (firstUnused) {
-      pay = parsePay(firstUnused.text);
-    }
-  }
-
-  const recovered = recoverMergedPayMinutesFromTranscript(normalized, pay, minutes, miles);
-  pay = recovered.pay;
-  minutes = recovered.minutes;
-
-  const hasPrimaryParse = Number.isFinite(pay) && pay > 0 && Number.isFinite(minutes) && minutes > 0 && Number.isFinite(miles) && miles > 0;
-  if (hasPrimaryParse) {
-    return normalizeVoiceResult({ pay, minutes, miles });
-  }
-
-  return normalizeVoiceResult(parseVoiceOrderFallbackFromChunks(chunks));
+  return normalizeVoiceResult({ pay, minutes, miles });
 }
 
 export default function App() {
@@ -675,8 +575,6 @@ export default function App() {
   const [apiIssue, setApiIssue] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [heardText, setHeardText] = useState("");
-  const [showDictationFallback, setShowDictationFallback] = useState(false);
-  const [dictationText, setDictationText] = useState("");
   const [showPreferences, setShowPreferences] = useState(false);
   const [showDonate, setShowDonate] = useState(false);
   const [bufferPercent, setBufferPercent] = useState(String(DEFAULT_BUFFER_PERCENT));
@@ -691,7 +589,6 @@ export default function App() {
   const milesInputRef = useRef(null);
   const voiceTimerRef = useRef(null);
   const voiceTranscriptRef = useRef("");
-  const dictationInputRef = useRef(null);
 
   const minutes = minutesDigits;
   const parsedBufferPercent = Number(bufferPercent);
@@ -704,13 +601,6 @@ export default function App() {
   useEffect(() => {
     payInputRef.current?.focus();
   }, []);
-
-  useEffect(() => {
-    if (!showDictationFallback) {
-      return;
-    }
-    window.setTimeout(() => dictationInputRef.current?.focus(), 0);
-  }, [showDictationFallback]);
 
   useEffect(() => {
     const timeout = window.setTimeout(async () => {
@@ -789,28 +679,6 @@ export default function App() {
     setShowDonate(true);
   }
 
-  function openDictationFallback(prefill = "") {
-    setDictationText(prefill);
-    setShowDictationFallback(true);
-  }
-
-  function applyDictationFallback() {
-    const transcript = dictationText.trim();
-    if (!transcript) {
-      return;
-    }
-
-    const parsed = parseVoiceOrder(transcript);
-    if (!parsed) {
-      setHeardText(`Could not parse: ${transcript}`);
-      return;
-    }
-
-    setHeardText(transcript);
-    fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
-    setShowDictationFallback(false);
-  }
-
   function handleDonateWithPaypal() {
     window.open(PAYPAL_DONATE_URL, "_blank", "noopener,noreferrer");
   }
@@ -866,8 +734,7 @@ export default function App() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition || isListening) {
       if (!SpeechRecognition) {
-        setHeardText("Live voice not supported here. Use dictation fallback.");
-        openDictationFallback("");
+        setHeardText("Voice input not supported in this browser.");
       }
       return;
     }
@@ -878,7 +745,6 @@ export default function App() {
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     const finalSegments = [];
-    let hasResolvedOrder = false;
 
     function appendFinalSegment(segment) {
       const trimmedSegment = (segment || "").trim();
@@ -924,10 +790,6 @@ export default function App() {
     voiceTranscriptRef.current = "";
 
     recognition.onresult = (event) => {
-      if (hasResolvedOrder) {
-        return;
-      }
-
       let interimTranscript = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const chunk = (event.results[index][0].transcript || "").trim();
@@ -942,16 +804,6 @@ export default function App() {
       const currentTranscript = `${combinedFinal} ${interimTranscript}`.trim();
       if (currentTranscript) {
         voiceTranscriptRef.current = currentTranscript;
-        setHeardText(currentTranscript);
-
-        const parsed = parseVoiceOrder(currentTranscript);
-        if (parsed && hasCompleteVoiceUnits(currentTranscript)) {
-          hasResolvedOrder = true;
-          fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
-          clearVoiceTimer();
-          recognition.stop();
-          return;
-        }
       }
       startVoiceSilenceTimer(recognition);
     };
@@ -964,7 +816,6 @@ export default function App() {
       clearVoiceTimer();
       if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
         setHeardText("Microphone blocked. Allow mic access for this site.");
-        openDictationFallback(voiceTranscriptRef.current || "");
         return;
       }
       if (event?.error === "no-speech") {
@@ -973,20 +824,14 @@ export default function App() {
       }
       if (event?.error) {
         setHeardText(`Voice error: ${event.error}`);
-        openDictationFallback(voiceTranscriptRef.current || "");
         return;
       }
       setHeardText("Voice input unavailable.");
-      openDictationFallback(voiceTranscriptRef.current || "");
     };
 
     recognition.onend = () => {
       clearVoiceTimer();
       setIsListening(false);
-
-      if (hasResolvedOrder) {
-        return;
-      }
 
       const transcript = finalSegments.join(" ").trim() || (voiceTranscriptRef.current || "").trim();
       if (!transcript) {
@@ -996,7 +841,7 @@ export default function App() {
       setHeardText(transcript);
       const parsed = parseVoiceOrder(transcript);
       if (!parsed) {
-        openDictationFallback(transcript);
+        setHeardText("Could not parse full order. Say: 7 dollars, 15 minutes, 6 miles.");
         return;
       }
 
@@ -1056,11 +901,7 @@ export default function App() {
                 {isListening ? "🎤 LISTENING..." : "🎤 VOICE ORDER"}
               </button>
               <div className="voice-heard">Heard: {heardText || "-"}</div>
-              {!speechRecognitionSupported ? (
-                <button type="button" className="dictation-button" onClick={() => openDictationFallback("")}>
-                  USE DICTATION FALLBACK
-                </button>
-              ) : null}
+              {!speechRecognitionSupported ? <div className="voice-heard">Voice input not supported in this browser.</div> : null}
 
               <div className="input-grid">
                 <label htmlFor="pay">Pay:</label>
@@ -1144,32 +985,6 @@ export default function App() {
                   </button>
                   <div className="prefs-actions">
                     <button type="button" onClick={() => setShowDonate(false)}>
-                      CLOSE
-                    </button>
-                  </div>
-                </div>
-              </section>
-            </div>
-          ) : null}
-
-          {showDictationFallback ? (
-            <div className="prefs-overlay" role="dialog" aria-modal="true" aria-label="Dictation Fallback">
-              <section className="prefs-window donate-window">
-                <div className="prefs-title">Voice Fallback</div>
-                <div className="prefs-body donate-body">
-                  <div>Use your keyboard microphone and say: pay, minutes, miles.</div>
-                  <input
-                    ref={dictationInputRef}
-                    inputMode="text"
-                    value={dictationText}
-                    onChange={(event) => setDictationText(event.target.value)}
-                    placeholder='Example: "8 dollars, 10 minutes, 20 miles"'
-                  />
-                  <button type="button" onClick={applyDictationFallback}>
-                    USE THIS ORDER
-                  </button>
-                  <div className="prefs-actions">
-                    <button type="button" onClick={() => setShowDictationFallback(false)}>
                       CLOSE
                     </button>
                   </div>
