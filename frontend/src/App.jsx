@@ -579,6 +579,7 @@ export default function App() {
   const [guaranteedTakePay, setGuaranteedTakePay] = useState("10");
 
   const [result, setResult] = useState(null);
+  const [apiIssue, setApiIssue] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [heardText, setHeardText] = useState("");
   const [sessionLogs, setSessionLogs] = useState([]);
@@ -624,6 +625,7 @@ export default function App() {
       const parsedMiles = milesForCalculation;
 
       if (!parsedPay || !parsedMinutes || !parsedMiles) {
+        setApiIssue("");
         setResult(null);
         return;
       }
@@ -648,13 +650,19 @@ export default function App() {
         });
 
         if (!response.ok) {
+          const responseBody = await response.text();
+          const responsePreview = responseBody ? ` ${responseBody.slice(0, 120)}` : "";
+          setApiIssue(`API ${response.status}.${responsePreview}`.trim());
           setResult(null);
           return;
         }
 
         const payload = await response.json();
+        setApiIssue("");
         setResult(payload);
-      } catch {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to reach API";
+        setApiIssue(`Cannot reach ${API_BASE} (${message})`);
         setResult(null);
       }
     }, 80);
@@ -952,6 +960,7 @@ export default function App() {
             <section className={`result-zone ${decisionPanelClass(result?.decision)}`} aria-live="polite">
               <div className="rate-hero">${result?.hourly_rate?.toFixed?.(2) ?? "0.00"}/hr</div>
               <div className={`decision-hero ${decisionClass(result?.decision)}`}>{decisionLabel(result?.decision)}</div>
+              {apiIssue ? <div className="api-issue">{apiIssue}</div> : null}
             </section>
           </div>
 
