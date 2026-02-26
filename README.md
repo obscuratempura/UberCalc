@@ -26,6 +26,12 @@ Optional API base override:
 set VITE_API_BASE=http://localhost:8000
 ```
 
+Optional donation button link:
+
+```bash
+set VITE_DONATE_URL=https://cash.app/$YourTag
+```
+
 ## Fastest share-link deployment (Vercel + Render)
 
 This is the quickest way to get a public URL for testers.
@@ -82,6 +88,10 @@ https://ubercalc-api.onrender.com
 1. Open your Vercel URL.
 2. Enter pay/minutes/miles and confirm result appears.
 3. Share that Vercel URL with testers.
+
+If you also want a Donate button in the app, add frontend env var:
+
+- `VITE_DONATE_URL` = `https://cash.app/$YourTag`
 
 ## Super-fast fallback (frontend-only)
 

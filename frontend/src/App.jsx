@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const DONATE_URL = (import.meta.env.VITE_DONATE_URL || "").trim();
 const PAY_LIMIT = 4;
 const MILES_LIMIT = 3;
 const MINUTES_LIMIT = 2;
@@ -685,6 +686,13 @@ export default function App() {
     payInputRef.current?.focus();
   }
 
+  function handleDonate() {
+    if (!DONATE_URL) {
+      return;
+    }
+    window.open(DONATE_URL, "_blank", "noopener,noreferrer");
+  }
+
   function onRowEnter(event, nextRef) {
     if (event.key === "Enter") {
       nextRef?.current?.focus();
@@ -944,6 +952,11 @@ export default function App() {
                   PREFERENCES
                 </button>
                 <div className="button-group">
+                  {DONATE_URL ? (
+                    <button type="button" onClick={handleDonate}>
+                      DONATE
+                    </button>
+                  ) : null}
                   <button type="button" onClick={handleClear}>
                     CLEAR
                   </button>
