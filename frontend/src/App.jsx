@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
-const DONATE_URL = (import.meta.env.VITE_DONATE_URL || "").trim();
+const PAYPAL_DONATE_URL = "https://www.paypal.com/ncp/payment/P32RLRSVDSXZQ";
 const PAY_LIMIT = 4;
 const MILES_LIMIT = 3;
 const MINUTES_LIMIT = 2;
@@ -588,6 +588,7 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [heardText, setHeardText] = useState("");
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showDonate, setShowDonate] = useState(false);
   const [bufferPercent, setBufferPercent] = useState(String(DEFAULT_BUFFER_PERCENT));
   const [distanceUnit, setDistanceUnit] = useState("mi");
   const [advancedMode, setAdvancedMode] = useState(false);
@@ -683,14 +684,14 @@ export default function App() {
     setMiles("");
     setHeardText("");
     setResult(null);
-    payInputRef.current?.focus();
   }
 
-  function handleDonate() {
-    if (!DONATE_URL) {
-      return;
-    }
-    window.open(DONATE_URL, "_blank", "noopener,noreferrer");
+  function handleOpenDonate() {
+    setShowDonate(true);
+  }
+
+  function handleDonateWithPaypal() {
+    window.open(PAYPAL_DONATE_URL, "_blank", "noopener,noreferrer");
   }
 
   function onRowEnter(event, nextRef) {
@@ -952,11 +953,6 @@ export default function App() {
                   PREFERENCES
                 </button>
                 <div className="button-group">
-                  {DONATE_URL ? (
-                    <button type="button" onClick={handleDonate}>
-                      DONATE
-                    </button>
-                  ) : null}
                   <button type="button" onClick={handleClear}>
                     CLEAR
                   </button>
@@ -976,6 +972,31 @@ export default function App() {
           <div className="voice-tip-bottom">
             Voice Tip: State your pay, minutes, then miles. Example: " 7 dollars, 15 minutes, 6 miles."
           </div>
+
+          <div className="donate-row">
+            <button type="button" onClick={handleOpenDonate} className="donate-launch">
+              DONATE
+            </button>
+          </div>
+
+          {showDonate ? (
+            <div className="prefs-overlay" role="dialog" aria-modal="true" aria-label="Donate">
+              <section className="prefs-window donate-window">
+                <div className="prefs-title">Buy Me a Coffee</div>
+                <div className="prefs-body donate-body">
+                  <div>If you enjoy this app, buy me a coffee.</div>
+                  <button type="button" onClick={handleDonateWithPaypal}>
+                    PAYPAL
+                  </button>
+                  <div className="prefs-actions">
+                    <button type="button" onClick={() => setShowDonate(false)}>
+                      CLOSE
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          ) : null}
 
           {showPreferences ? (
             <div className="prefs-overlay" role="dialog" aria-modal="true" aria-label="Preferences">

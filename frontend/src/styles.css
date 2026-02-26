@@ -165,6 +165,15 @@ button:disabled {
   max-width: 100%;
 }
 
+.donate-row {
+  display: flex;
+  justify-content: center;
+}
+
+.donate-launch {
+  min-width: 180px;
+}
+
 .advanced-badge {
   border: 2px solid #808080;
   background: #fff9d6;
@@ -254,6 +263,18 @@ button:disabled {
   background: #c0c0c0;
   border: 2px solid #000;
   box-shadow: inset -1px -1px #808080, inset 1px 1px #fff;
+}
+
+.donate-window {
+  width: min(100%, 360px);
+}
+
+.donate-body {
+  gap: 12px;
+}
+
+.donate-body button {
+  width: 100%;
 }
 
 .prefs-title {
