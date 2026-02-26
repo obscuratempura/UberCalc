@@ -6,7 +6,7 @@ const PAY_LIMIT = 4;
 const MILES_LIMIT = 3;
 const MINUTES_LIMIT = 2;
 const DEFAULT_BUFFER_PERCENT = 15;
-const VOICE_SILENCE_TIMEOUT_MS = 2000;
+const VOICE_SILENCE_TIMEOUT_MS = 4500;
 
 const SMALL_NUMBERS = {
   zero: 0,
@@ -831,7 +831,7 @@ export default function App() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     const finalSegments = [];
@@ -935,6 +935,7 @@ export default function App() {
       setHeardText(transcript);
       const parsed = parseVoiceOrder(transcript);
       if (!parsed) {
+        openDictationFallback(transcript);
         return;
       }
 
