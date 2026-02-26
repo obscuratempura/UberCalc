@@ -528,7 +528,7 @@ function parseVoiceOrder(transcript) {
   const dollarUnitIndex = tokens.findIndex((token) => ["dollar", "dollars", "buck", "bucks"].includes(token));
   const payKeywordIndex = tokens.findIndex((token) => ["pay", "payout"].includes(token));
 
-  if (minutesUnitIndex < 0 || distanceUnitIndex < 0 || (dollarUnitIndex < 0 && payKeywordIndex < 0)) {
+  if (minutesUnitIndex < 0 || distanceUnitIndex < 0) {
     return null;
   }
 
@@ -541,6 +541,14 @@ function parseVoiceOrder(transcript) {
   if (dollarUnitIndex >= 0) {
     const payTokens = extractAmountTokensBeforeUnit(tokens, dollarUnitIndex, "pay");
     pay = parsePay(payTokens.join(" "));
+  }
+
+  if (!Number.isFinite(pay) || pay <= 0) {
+    const firstUnitIndex = Math.min(minutesUnitIndex, distanceUnitIndex);
+    const payLeadTokens = sanitizeNumberTokens(tokens.slice(0, firstUnitIndex));
+    if (payLeadTokens.length) {
+      pay = parsePay(payLeadTokens.join(" "));
+    }
   }
 
   if ((!Number.isFinite(pay) || pay <= 0) && payKeywordIndex >= 0) {
@@ -841,7 +849,7 @@ export default function App() {
       setHeardText(transcript);
       const parsed = parseVoiceOrder(transcript);
       if (!parsed) {
-        setHeardText("Could not parse full order. Say: 7 dollars, 15 minutes, 6 miles.");
+        setHeardText("Could not parse order.");
         return;
       }
 
