@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 const PAY_LIMIT = 4;
@@ -582,7 +582,6 @@ export default function App() {
   const [apiIssue, setApiIssue] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [heardText, setHeardText] = useState("");
-  const [sessionLogs, setSessionLogs] = useState([]);
   const [showPreferences, setShowPreferences] = useState(false);
   const [bufferPercent, setBufferPercent] = useState(String(DEFAULT_BUFFER_PERCENT));
   const [distanceUnit, setDistanceUnit] = useState("mi");
@@ -601,18 +600,8 @@ export default function App() {
   const parsedBufferPercent = Number(bufferPercent);
   const safeBufferPercent = Number.isFinite(parsedBufferPercent) ? Math.max(0, parsedBufferPercent) : DEFAULT_BUFFER_PERCENT;
   const activeBufferMultiplier = 1 + safeBufferPercent / 100;
-  const effectiveMinutesValue = toNumberOrZero(minutes) * activeBufferMultiplier;
   const parsedDistanceInput = toNumberOrZero(miles);
   const milesForCalculation = distanceUnit === "km" ? parsedDistanceInput * 0.621371 : parsedDistanceInput;
-
-  const sessionAveragePerHour = useMemo(() => {
-    const totalPay = sessionLogs.reduce((sum, log) => sum + log.pay, 0);
-    const totalEffectiveMinutes = sessionLogs.reduce((sum, log) => sum + log.effectiveMinutes, 0);
-    if (!totalPay || !totalEffectiveMinutes) {
-      return 0;
-    }
-    return totalPay / (totalEffectiveMinutes / 60);
-  }, [sessionLogs]);
 
   useEffect(() => {
     payInputRef.current?.focus();
@@ -690,26 +679,6 @@ export default function App() {
     setHeardText("");
     setResult(null);
     payInputRef.current?.focus();
-  }
-
-  function handleLogTrip() {
-    const parsedPay = toNumberOrZero(pay);
-    if (!parsedPay || !effectiveMinutesValue) {
-      return;
-    }
-
-    setSessionLogs((current) => [
-      ...current,
-      {
-        pay: parsedPay,
-        effectiveMinutes: effectiveMinutesValue,
-        createdAt: Date.now(),
-      },
-    ]);
-  }
-
-  function handleClearSession() {
-    setSessionLogs([]);
   }
 
   function onRowEnter(event, nextRef) {
@@ -941,17 +910,7 @@ export default function App() {
                   <button type="button" onClick={handleClear}>
                     CLEAR
                   </button>
-                  <button type="button" onClick={handleLogTrip}>
-                    LOG TRIP
-                  </button>
                 </div>
-              </div>
-
-              <div className="session-row">
-                <div className="session-average">Session Avg $/hr: ${sessionAveragePerHour.toFixed(2)}</div>
-                <button type="button" className="clear-session-button" onClick={handleClearSession}>
-                  CLEAR SESSION
-                </button>
               </div>
 
               {advancedMode ? <div className="advanced-badge">★ Advanced Profit Mode ON</div> : null}

@@ -162,28 +162,6 @@ button:disabled {
   min-width: 140px;
 }
 
-.session-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.session-average {
-  border: 2px solid #808080;
-  background: #fff;
-  min-height: 36px;
-  padding: 6px 8px;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  font-weight: 700;
-}
-
-.clear-session-button {
-  min-width: 120px;
-}
-
 .voice-tip-bottom {
   border: 2px solid #808080;
   background: #fff;
@@ -363,10 +341,6 @@ button:disabled {
 
   .button-bar button {
     width: 100%;
-  }
-
-  .session-row {
-    grid-template-columns: 1fr;
   }
 
   .prefs-grid {
