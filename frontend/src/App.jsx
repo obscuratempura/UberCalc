@@ -582,6 +582,7 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [apiIssue, setApiIssue] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState("idle");
   const [heardText, setHeardText] = useState("");
   const [showPreferences, setShowPreferences] = useState(false);
   const [showDonate, setShowDonate] = useState(false);
@@ -619,6 +620,9 @@ export default function App() {
       if (!parsedPay || !parsedMinutes || !parsedMiles) {
         setApiIssue("");
         setResult(null);
+        if (voiceStatus === "calculating") {
+          setVoiceStatus("idle");
+        }
         return;
       }
 
@@ -652,10 +656,16 @@ export default function App() {
         const payload = await response.json();
         setApiIssue("");
         setResult(payload);
+        if (voiceStatus === "calculating") {
+          setVoiceStatus("idle");
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to reach API";
         setApiIssue(`Cannot reach ${API_BASE} (${message})`);
         setResult(null);
+        if (voiceStatus === "calculating") {
+          setVoiceStatus("idle");
+        }
       }
     }, 80);
 
@@ -743,6 +753,7 @@ export default function App() {
     if (!SpeechRecognition || isListening) {
       if (!SpeechRecognition) {
         setHeardText("Voice input not supported in this browser.");
+        setVoiceStatus("idle");
       }
       return;
     }
@@ -794,6 +805,7 @@ export default function App() {
     setMiles("");
     setResult(null);
     setIsListening(true);
+    setVoiceStatus("listening");
     setHeardText("-");
     voiceTranscriptRef.current = "";
 
@@ -822,6 +834,8 @@ export default function App() {
 
     recognition.onerror = (event) => {
       clearVoiceTimer();
+      setIsListening(false);
+      setVoiceStatus("idle");
       if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
         setHeardText("Microphone blocked. Allow mic access for this site.");
         return;
@@ -840,9 +854,11 @@ export default function App() {
     recognition.onend = () => {
       clearVoiceTimer();
       setIsListening(false);
+      setVoiceStatus("processing");
 
       const transcript = finalSegments.join(" ").trim() || (voiceTranscriptRef.current || "").trim();
       if (!transcript) {
+        setVoiceStatus("idle");
         return;
       }
 
@@ -850,12 +866,14 @@ export default function App() {
       const parsed = parseVoiceOrder(transcript);
       if (!parsed) {
         setHeardText("Could not parse order.");
+        setVoiceStatus("idle");
         return;
       }
 
       setHeardText(`$${parsed.pay} ${parsed.minutes} minutes ${parsed.miles} miles`);
 
       fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
+      setVoiceStatus("calculating");
     };
 
     recognition.start();
@@ -911,6 +929,15 @@ export default function App() {
                 {isListening ? "🎤 LISTENING..." : "🎤 VOICE ORDER"}
               </button>
               <div className="voice-heard">Heard: {heardText || "-"}</div>
+              <div className="voice-status">
+                {voiceStatus === "listening"
+                  ? "Status: Listening..."
+                  : voiceStatus === "processing"
+                    ? "Status: Processing voice..."
+                    : voiceStatus === "calculating"
+                      ? "Status: Calculating..."
+                      : "Status: Ready"}
+              </div>
               {!speechRecognitionSupported ? <div className="voice-heard">Voice input not supported in this browser.</div> : null}
 
               <div className="input-grid">
