@@ -657,6 +657,7 @@ export default function App() {
   const parsedDistanceInput = toNumberOrZero(miles);
   const milesForCalculation = distanceUnit === "km" ? parsedDistanceInput * 0.621371 : parsedDistanceInput;
   const speechRecognitionSupported = typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  const isMobileDevice = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   useEffect(() => {
     payInputRef.current?.focus();
@@ -820,6 +821,12 @@ export default function App() {
   }
 
   function handleVoiceInput() {
+    if (isMobileDevice) {
+      setHeardText("Using dictation fallback for reliable mobile voice input.");
+      openDictationFallback("");
+      return;
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition || isListening) {
       if (!SpeechRecognition) {
