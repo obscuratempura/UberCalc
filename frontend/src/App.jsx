@@ -657,7 +657,6 @@ export default function App() {
   const parsedDistanceInput = toNumberOrZero(miles);
   const milesForCalculation = distanceUnit === "km" ? parsedDistanceInput * 0.621371 : parsedDistanceInput;
   const speechRecognitionSupported = typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-  const isMobileDevice = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   useEffect(() => {
     payInputRef.current?.focus();
@@ -821,12 +820,6 @@ export default function App() {
   }
 
   function handleVoiceInput() {
-    if (isMobileDevice) {
-      setHeardText("Using dictation fallback for reliable mobile voice input.");
-      openDictationFallback("");
-      return;
-    }
-
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition || isListening) {
       if (!SpeechRecognition) {
@@ -842,6 +835,7 @@ export default function App() {
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
     const finalSegments = [];
+    let hasResolvedOrder = false;
 
     function appendFinalSegment(segment) {
       const trimmedSegment = (segment || "").trim();
@@ -887,6 +881,10 @@ export default function App() {
     voiceTranscriptRef.current = "";
 
     recognition.onresult = (event) => {
+      if (hasResolvedOrder) {
+        return;
+      }
+
       let interimTranscript = "";
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const chunk = (event.results[index][0].transcript || "").trim();
@@ -902,6 +900,15 @@ export default function App() {
       if (currentTranscript) {
         voiceTranscriptRef.current = currentTranscript;
         setHeardText(currentTranscript);
+
+        const parsed = parseVoiceOrder(currentTranscript);
+        if (parsed) {
+          hasResolvedOrder = true;
+          fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
+          clearVoiceTimer();
+          recognition.stop();
+          return;
+        }
       }
       startVoiceSilenceTimer(recognition);
     };
@@ -933,6 +940,10 @@ export default function App() {
     recognition.onend = () => {
       clearVoiceTimer();
       setIsListening(false);
+
+      if (hasResolvedOrder) {
+        return;
+      }
 
       const transcript = finalSegments.join(" ").trim() || (voiceTranscriptRef.current || "").trim();
       if (!transcript) {
