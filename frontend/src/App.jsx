@@ -302,8 +302,11 @@ function parsePay(phrase) {
     return NaN;
   }
 
+  const hasExplicitCents = /\bcent(s)?\b/.test(cleaned);
+  const hasExplicitPoint = /\bpoint\b/.test(cleaned);
+
   const fractional = parseFractionalExpression(cleaned);
-  if (Number.isFinite(fractional)) {
+  if (Number.isFinite(fractional) && (hasExplicitCents || hasExplicitPoint)) {
     return fractional;
   }
 
@@ -313,7 +316,7 @@ function parsePay(phrase) {
     .filter((token) => !["pay", "payout", "is", "for", "about", "around", "dollar", "dollars", "buck", "bucks", "cent", "cents"].includes(token));
 
   const payChunks = collectNumberChunks(payTokens);
-  if (payChunks.length >= 2) {
+  if (hasExplicitCents && payChunks.length >= 2) {
     const dollars = parseGeneralNumber(payChunks[0].text);
     const cents = parseGeneralNumber(payChunks[1].text);
     if (Number.isFinite(dollars) && Number.isFinite(cents) && cents >= 0 && cents < 100) {
@@ -330,10 +333,17 @@ function parsePay(phrase) {
 
   const numericMatch = cleaned.match(/\d+(?:\.\d+)?/);
   if (numericMatch) {
-    return Number(numericMatch[0]);
+    const numericValue = Number(numericMatch[0]);
+    if (!Number.isFinite(numericValue)) {
+      return NaN;
+    }
+    if (hasExplicitCents || hasExplicitPoint) {
+      return numericValue;
+    }
+    return Math.trunc(numericValue);
   }
 
-  if (cleaned.includes("point")) {
+  if (hasExplicitPoint) {
     return parseGeneralNumber(cleaned);
   }
 
@@ -342,7 +352,7 @@ function parsePay(phrase) {
     return NaN;
   }
 
-  if (tokens.length >= 2) {
+  if (hasExplicitCents && tokens.length >= 2) {
     const left = parseWordInteger(tokens.slice(0, -1).join(" "));
     const right = parseWordInteger(tokens[tokens.length - 1]);
     if (Number.isFinite(left) && Number.isFinite(right) && right >= 10 && right < 100) {
@@ -350,7 +360,39 @@ function parsePay(phrase) {
     }
   }
 
-  return parseWordInteger(cleaned);
+  const parsedInteger = parseWordInteger(cleaned);
+  if (!Number.isFinite(parsedInteger)) {
+    return NaN;
+  }
+  return Math.trunc(parsedInteger);
+}
+
+function hasCompleteVoiceUnits(transcript) {
+  const normalized = normalizeSpeech(transcript);
+  if (!normalized) {
+    return false;
+  }
+
+  const tokens = normalized.split(" ").filter(Boolean);
+  const hasMinutesUnit = tokens.some((token) => MINUTE_UNIT_TOKENS.includes(token));
+  const hasDistanceUnit = tokens.some((token) => DISTANCE_UNIT_TOKENS.includes(token));
+  return hasMinutesUnit && hasDistanceUnit;
+}
+
+function normalizeVoiceResult(result) {
+  if (!result) {
+    return null;
+  }
+
+  const pay = Math.trunc(toNumberOrZero(result.pay));
+  const minutes = Math.round(toNumberOrZero(result.minutes));
+  const miles = Math.round(toNumberOrZero(result.miles));
+
+  if (!pay || !minutes || !miles) {
+    return null;
+  }
+
+  return { pay, minutes, miles };
 }
 
 function extractAmountTokensBeforeUnit(tokens, unitIndex, mode) {
@@ -541,7 +583,7 @@ function parseVoiceOrder(transcript) {
     }
 
     if (Number.isFinite(pay) && pay > 0 && Number.isFinite(minutes) && minutes > 0 && Number.isFinite(miles) && miles > 0) {
-      return { pay, minutes, miles };
+      return normalizeVoiceResult({ pay, minutes, miles });
     }
   }
 
@@ -614,10 +656,10 @@ function parseVoiceOrder(transcript) {
 
   const hasPrimaryParse = Number.isFinite(pay) && pay > 0 && Number.isFinite(minutes) && minutes > 0 && Number.isFinite(miles) && miles > 0;
   if (hasPrimaryParse) {
-    return { pay, minutes, miles };
+    return normalizeVoiceResult({ pay, minutes, miles });
   }
 
-  return parseVoiceOrderFallbackFromChunks(chunks);
+  return normalizeVoiceResult(parseVoiceOrderFallbackFromChunks(chunks));
 }
 
 export default function App() {
@@ -902,7 +944,7 @@ export default function App() {
         setHeardText(currentTranscript);
 
         const parsed = parseVoiceOrder(currentTranscript);
-        if (parsed) {
+        if (parsed && hasCompleteVoiceUnits(currentTranscript)) {
           hasResolvedOrder = true;
           fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
           clearVoiceTimer();
