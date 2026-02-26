@@ -305,7 +305,7 @@ function parsePay(phrase) {
   const payTokens = cleaned
     .split(" ")
     .filter(Boolean)
-    .filter((token) => !["pay", "payout", "is", "for", "about", "around", "dollar", "dollars", "buck", "bucks", "cent", "cents"].includes(token));
+    .filter((token) => !["pay", "payout", "is", "for", "about", "around", "dollar", "dollars", "buck", "bucks"].includes(token));
 
   const payChunks = collectNumberChunks(payTokens);
   if (payChunks.length >= 1) {
