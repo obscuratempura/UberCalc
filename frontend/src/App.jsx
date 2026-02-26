@@ -587,6 +587,8 @@ export default function App() {
   const [apiIssue, setApiIssue] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [heardText, setHeardText] = useState("");
+  const [showDictationFallback, setShowDictationFallback] = useState(false);
+  const [dictationText, setDictationText] = useState("");
   const [showPreferences, setShowPreferences] = useState(false);
   const [showDonate, setShowDonate] = useState(false);
   const [bufferPercent, setBufferPercent] = useState(String(DEFAULT_BUFFER_PERCENT));
@@ -601,6 +603,7 @@ export default function App() {
   const milesInputRef = useRef(null);
   const voiceTimerRef = useRef(null);
   const voiceTranscriptRef = useRef("");
+  const dictationInputRef = useRef(null);
 
   const minutes = minutesDigits;
   const parsedBufferPercent = Number(bufferPercent);
@@ -608,10 +611,18 @@ export default function App() {
   const activeBufferMultiplier = 1 + safeBufferPercent / 100;
   const parsedDistanceInput = toNumberOrZero(miles);
   const milesForCalculation = distanceUnit === "km" ? parsedDistanceInput * 0.621371 : parsedDistanceInput;
+  const speechRecognitionSupported = typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   useEffect(() => {
     payInputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!showDictationFallback) {
+      return;
+    }
+    window.setTimeout(() => dictationInputRef.current?.focus(), 0);
+  }, [showDictationFallback]);
 
   useEffect(() => {
     const timeout = window.setTimeout(async () => {
@@ -690,6 +701,28 @@ export default function App() {
     setShowDonate(true);
   }
 
+  function openDictationFallback(prefill = "") {
+    setDictationText(prefill);
+    setShowDictationFallback(true);
+  }
+
+  function applyDictationFallback() {
+    const transcript = dictationText.trim();
+    if (!transcript) {
+      return;
+    }
+
+    const parsed = parseVoiceOrder(transcript);
+    if (!parsed) {
+      setHeardText(`Could not parse: ${transcript}`);
+      return;
+    }
+
+    setHeardText(transcript);
+    fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
+    setShowDictationFallback(false);
+  }
+
   function handleDonateWithPaypal() {
     window.open(PAYPAL_DONATE_URL, "_blank", "noopener,noreferrer");
   }
@@ -745,6 +778,10 @@ export default function App() {
   function handleVoiceInput() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition || isListening) {
+      if (!SpeechRecognition) {
+        setHeardText("Live voice not supported here. Use dictation fallback.");
+        openDictationFallback("");
+      }
       return;
     }
 
@@ -826,6 +863,7 @@ export default function App() {
       clearVoiceTimer();
       if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
         setHeardText("Microphone blocked. Allow mic access for this site.");
+        openDictationFallback(voiceTranscriptRef.current || "");
         return;
       }
       if (event?.error === "no-speech") {
@@ -834,9 +872,11 @@ export default function App() {
       }
       if (event?.error) {
         setHeardText(`Voice error: ${event.error}`);
+        openDictationFallback(voiceTranscriptRef.current || "");
         return;
       }
       setHeardText("Voice input unavailable.");
+      openDictationFallback(voiceTranscriptRef.current || "");
     };
 
     recognition.onend = () => {
@@ -910,6 +950,11 @@ export default function App() {
                 {isListening ? "🎤 LISTENING..." : "🎤 VOICE ORDER"}
               </button>
               <div className="voice-heard">Heard: {heardText || "-"}</div>
+              {!speechRecognitionSupported ? (
+                <button type="button" className="dictation-button" onClick={() => openDictationFallback("")}>
+                  USE DICTATION FALLBACK
+                </button>
+              ) : null}
 
               <div className="input-grid">
                 <label htmlFor="pay">Pay:</label>
@@ -993,6 +1038,32 @@ export default function App() {
                   </button>
                   <div className="prefs-actions">
                     <button type="button" onClick={() => setShowDonate(false)}>
+                      CLOSE
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          ) : null}
+
+          {showDictationFallback ? (
+            <div className="prefs-overlay" role="dialog" aria-modal="true" aria-label="Dictation Fallback">
+              <section className="prefs-window donate-window">
+                <div className="prefs-title">Voice Fallback</div>
+                <div className="prefs-body donate-body">
+                  <div>Use your keyboard microphone and say: pay, minutes, miles.</div>
+                  <input
+                    ref={dictationInputRef}
+                    inputMode="text"
+                    value={dictationText}
+                    onChange={(event) => setDictationText(event.target.value)}
+                    placeholder='Example: "8 dollars, 10 minutes, 20 miles"'
+                  />
+                  <button type="button" onClick={applyDictationFallback}>
+                    USE THIS ORDER
+                  </button>
+                  <div className="prefs-actions">
+                    <button type="button" onClick={() => setShowDictationFallback(false)}>
                       CLOSE
                     </button>
                   </div>

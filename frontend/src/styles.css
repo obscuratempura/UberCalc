@@ -79,6 +79,10 @@ body {
   align-items: center;
 }
 
+.dictation-button {
+  width: 100%;
+}
+
 .input-grid,
 .target-grid {
   display: grid;
