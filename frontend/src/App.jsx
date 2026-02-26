@@ -376,7 +376,8 @@ function hasCompleteVoiceUnits(transcript) {
   const tokens = normalized.split(" ").filter(Boolean);
   const hasMinutesUnit = tokens.some((token) => MINUTE_UNIT_TOKENS.includes(token));
   const hasDistanceUnit = tokens.some((token) => DISTANCE_UNIT_TOKENS.includes(token));
-  return hasMinutesUnit && hasDistanceUnit;
+  const hasPayUnit = tokens.some((token) => PAY_HINT_TOKENS.includes(token));
+  return hasPayUnit && hasMinutesUnit && hasDistanceUnit;
 }
 
 function normalizeVoiceResult(result) {
