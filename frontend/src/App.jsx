@@ -336,19 +336,6 @@ function parsePay(phrase) {
   return Math.trunc(parsedInteger);
 }
 
-function hasCompleteVoiceUnits(transcript) {
-  const normalized = normalizeSpeech(transcript);
-  if (!normalized) {
-    return false;
-  }
-
-  const tokens = normalized.split(" ").filter(Boolean);
-  const hasMinutesUnit = tokens.some((token) => MINUTE_UNIT_TOKENS.includes(token));
-  const hasDistanceUnit = tokens.some((token) => DISTANCE_UNIT_TOKENS.includes(token));
-  const hasPayUnit = tokens.some((token) => PAY_HINT_TOKENS.includes(token));
-  return hasPayUnit && hasMinutesUnit && hasDistanceUnit;
-}
-
 function normalizeVoiceResult(result) {
   if (!result) {
     return null;
@@ -421,99 +408,20 @@ function collectNumberChunks(tokens) {
   return chunks;
 }
 
-function chooseChunkBeforeIndex(chunks, tokenIndex, usedChunkIndexes) {
+function findNearestChunkBefore(chunks, minEndExclusive, unitIndex) {
   let chosen = null;
-  for (let index = 0; index < chunks.length; index += 1) {
-    if (usedChunkIndexes.has(index)) {
+  for (const chunk of chunks) {
+    if (chunk.end <= minEndExclusive) {
       continue;
     }
-    const chunk = chunks[index];
-    if (chunk.end < tokenIndex && (!chosen || chunk.end > chosen.chunk.end)) {
-      chosen = { index, chunk };
+    if (chunk.end >= unitIndex) {
+      continue;
+    }
+    if (!chosen || chunk.end > chosen.end) {
+      chosen = chunk;
     }
   }
   return chosen;
-}
-
-function chooseChunkNearKeyword(chunks, keywordIndex, usedChunkIndexes) {
-  let chosen = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
-
-  for (let index = 0; index < chunks.length; index += 1) {
-    if (usedChunkIndexes.has(index)) {
-      continue;
-    }
-    const chunk = chunks[index];
-    const chunkCenter = (chunk.start + chunk.end) / 2;
-    const distance = Math.abs(chunkCenter - keywordIndex);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      chosen = { index, chunk };
-    }
-  }
-
-  return chosen;
-}
-
-function parseVoiceOrderFallbackFromChunks(chunks) {
-  if (chunks.length < 3) {
-    return null;
-  }
-
-  const pay = parsePay(chunks[0].text);
-  const minutes = parseGeneralNumber(chunks[1].text);
-  const miles = parseGeneralNumber(chunks[2].text);
-
-  if (!Number.isFinite(pay) || !Number.isFinite(minutes) || !Number.isFinite(miles)) {
-    return null;
-  }
-
-  if (pay <= 0 || minutes <= 0 || miles <= 0) {
-    return null;
-  }
-
-  return { pay, minutes, miles };
-}
-
-function recoverMergedPayMinutesFromTranscript(normalized, pay, minutes, miles) {
-  if (!Number.isFinite(pay) || pay <= 0 || !Number.isFinite(miles) || miles <= 0) {
-    return { pay, minutes };
-  }
-
-  const dollars = Math.trunc(pay);
-  const cents = Math.round((pay - dollars) * 100);
-  if (cents <= 0 || cents >= 100) {
-    return { pay, minutes };
-  }
-
-  const minutesMissingOrSuspicious = !Number.isFinite(minutes) || minutes <= 0 || minutes === dollars;
-  if (!minutesMissingOrSuspicious) {
-    return { pay, minutes };
-  }
-
-  const mergedPattern =
-    /\b(\d+)\.(\d{1,2})\s+(\d{1,2})(?=\s+(?:and\s+)?\d+(?:\.\d+)?\s+(?:mile|miles|mi|kilometer|kilometers|km|kms|ki|kilo|kilos)\b)/;
-  const match = normalized.match(mergedPattern);
-  if (!match) {
-    return { pay, minutes };
-  }
-
-  const matchedDollars = Number(match[1]);
-  const matchedCents = Number(match[2]);
-  const matchedMinutes = Number(match[3]);
-
-  if (!Number.isFinite(matchedDollars) || !Number.isFinite(matchedCents) || !Number.isFinite(matchedMinutes)) {
-    return { pay, minutes };
-  }
-
-  if (matchedDollars !== dollars || matchedCents !== matchedMinutes) {
-    return { pay, minutes };
-  }
-
-  return {
-    pay: matchedDollars,
-    minutes: matchedMinutes,
-  };
 }
 
 function parseVoiceOrder(transcript) {
@@ -523,50 +431,64 @@ function parseVoiceOrder(transcript) {
   }
 
   const tokens = normalized.split(" ").filter(Boolean);
-  const minutesUnitIndex = tokens.findIndex((token) => MINUTE_UNIT_TOKENS.includes(token));
-  const distanceUnitIndex = tokens.findIndex((token) => DISTANCE_UNIT_TOKENS.includes(token));
-  const dollarUnitIndex = tokens.findIndex((token) => ["dollar", "dollars", "buck", "bucks"].includes(token));
-  const payKeywordIndex = tokens.findIndex((token) => ["pay", "payout"].includes(token));
-
-  if (minutesUnitIndex < 0 || distanceUnitIndex < 0) {
+  const chunks = collectNumberChunks(tokens);
+  if (!chunks.length) {
     return null;
   }
 
-  const minutesTokens = extractAmountTokensBeforeUnit(tokens, minutesUnitIndex, "minutes");
-  const distanceTokens = extractAmountTokensBeforeUnit(tokens, distanceUnitIndex, "miles");
-  const minutes = parseGeneralNumber(minutesTokens.join(" "));
-  const miles = parseGeneralNumber(distanceTokens.join(" "));
+  const payCandidates = [];
+  const minuteCandidates = [];
+  const mileCandidates = [];
 
-  let pay = NaN;
-  if (dollarUnitIndex >= 0) {
-    const payTokens = extractAmountTokensBeforeUnit(tokens, dollarUnitIndex, "pay");
-    pay = parsePay(payTokens.join(" "));
-  }
+  let lastUnitIndex = -1;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const isPayUnit = ["dollar", "dollars", "buck", "bucks", "pay", "payout"].includes(token);
+    const isMinuteUnit = MINUTE_UNIT_TOKENS.includes(token);
+    const isMileUnit = DISTANCE_UNIT_TOKENS.includes(token);
 
-  if (!Number.isFinite(pay) || pay <= 0) {
-    const firstUnitIndex = Math.min(minutesUnitIndex, distanceUnitIndex);
-    const payLeadTokens = sanitizeNumberTokens(tokens.slice(0, firstUnitIndex));
-    if (payLeadTokens.length) {
-      pay = parsePay(payLeadTokens.join(" "));
+    if (!isPayUnit && !isMinuteUnit && !isMileUnit) {
+      continue;
+    }
+
+    const chunk = findNearestChunkBefore(chunks, lastUnitIndex, index);
+    lastUnitIndex = index;
+
+    if (!chunk) {
+      continue;
+    }
+
+    if (isPayUnit) {
+      const value = parsePay(chunk.text);
+      if (Number.isFinite(value) && value > 0) {
+        payCandidates.push(value);
+      }
+      continue;
+    }
+
+    if (isMinuteUnit) {
+      const value = parseGeneralNumber(chunk.text);
+      if (Number.isFinite(value) && value > 0) {
+        minuteCandidates.push(value);
+      }
+      continue;
+    }
+
+    if (isMileUnit) {
+      const value = parseGeneralNumber(chunk.text);
+      if (Number.isFinite(value) && value > 0) {
+        mileCandidates.push(value);
+      }
     }
   }
 
-  if ((!Number.isFinite(pay) || pay <= 0) && payKeywordIndex >= 0) {
-    const nextUnitAfterPay = [minutesUnitIndex, distanceUnitIndex]
-      .filter((index) => index > payKeywordIndex)
-      .sort((left, right) => left - right)[0];
-
-    const paySearchEnd = Number.isFinite(nextUnitAfterPay) ? nextUnitAfterPay : tokens.length;
-    const paySearchTokens = tokens.slice(payKeywordIndex + 1, paySearchEnd);
-    const payChunks = collectNumberChunks(paySearchTokens);
-    if (payChunks.length) {
-      pay = parsePay(payChunks[0].text);
-    }
-  }
-
-  if (!Number.isFinite(pay) || pay <= 0 || !Number.isFinite(minutes) || minutes <= 0 || !Number.isFinite(miles) || miles <= 0) {
+  if (!payCandidates.length || !minuteCandidates.length || !mileCandidates.length) {
     return null;
   }
+
+  const pay = payCandidates[payCandidates.length - 1];
+  const minutes = minuteCandidates[minuteCandidates.length - 1];
+  const miles = mileCandidates[mileCandidates.length - 1];
 
   return normalizeVoiceResult({ pay, minutes, miles });
 }
