@@ -343,13 +343,25 @@ function normalizeVoiceResult(result) {
 
   const pay = Math.trunc(toNumberOrZero(result.pay));
   const minutes = Math.round(toNumberOrZero(result.minutes));
-  const miles = Math.round(toNumberOrZero(result.miles));
+  const miles = toNumberOrZero(result.miles);
 
   if (!pay || !minutes || !miles) {
     return null;
   }
 
   return { pay, minutes, miles };
+}
+
+function parseNumberChunkValue(text, mode) {
+  if (!text) {
+    return NaN;
+  }
+
+  if (mode === "pay") {
+    return parsePay(text);
+  }
+
+  return parseGeneralNumber(text);
 }
 
 function extractAmountTokensBeforeUnit(tokens, unitIndex, mode) {
@@ -483,7 +495,39 @@ function parseVoiceOrder(transcript) {
   }
 
   if (!payCandidates.length || !minuteCandidates.length || !mileCandidates.length) {
-    return null;
+    const chunkValues = chunks
+      .map((chunk) => parseGeneralNumber(chunk.text))
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (chunkValues.length >= 3) {
+      const fallbackPay = Math.trunc(chunkValues[0]);
+      const fallbackMinutes = chunkValues[1];
+      const fallbackMiles = chunkValues[2];
+      const normalizedFallback = normalizeVoiceResult({
+        pay: fallbackPay,
+        minutes: fallbackMinutes,
+        miles: fallbackMiles,
+      });
+
+      if (normalizedFallback) {
+        return normalizedFallback;
+      }
+    }
+
+    const payFromChunks =
+      payCandidates[payCandidates.length - 1] ?? parseNumberChunkValue(chunks[0]?.text, "pay");
+    const minutesFromChunks =
+      minuteCandidates[minuteCandidates.length - 1] ??
+      parseNumberChunkValue(chunks[1]?.text ?? chunks[0]?.text, "minutes");
+    const milesFromChunks =
+      mileCandidates[mileCandidates.length - 1] ??
+      parseNumberChunkValue(chunks[2]?.text ?? chunks[chunks.length - 1]?.text, "miles");
+
+    return normalizeVoiceResult({
+      pay: payFromChunks,
+      minutes: minutesFromChunks,
+      miles: milesFromChunks,
+    });
   }
 
   const pay = payCandidates[payCandidates.length - 1];
@@ -491,6 +535,51 @@ function parseVoiceOrder(transcript) {
   const miles = mileCandidates[mileCandidates.length - 1];
 
   return normalizeVoiceResult({ pay, minutes, miles });
+}
+
+function chooseBestRecognitionTranscript(result) {
+  if (!result || !result.length) {
+    return "";
+  }
+
+  let bestTranscript = "";
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (let index = 0; index < result.length; index += 1) {
+    const transcript = (result[index]?.transcript || "").trim();
+    if (!transcript) {
+      continue;
+    }
+
+    const parsed = parseVoiceOrder(transcript);
+    const confidence = Number(result[index]?.confidence);
+    let score = Number.isFinite(confidence) ? confidence * 1000 : 0;
+    score += transcript.length;
+
+    if (parsed) {
+      score += 100;
+      if (parsed.minutes >= 10) {
+        score += 10;
+      }
+      if (parsed.minutes !== parsed.pay) {
+        score += 15;
+      }
+      if (parsed.miles % 1 !== 0) {
+        score += 4;
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestTranscript = transcript;
+    }
+  }
+
+  if (bestTranscript) {
+    return bestTranscript;
+  }
+
+  return (result[0]?.transcript || "").trim();
 }
 
 export default function App() {
@@ -682,45 +771,9 @@ export default function App() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    const finalSegments = [];
-
-    function appendFinalSegment(segment) {
-      const trimmedSegment = (segment || "").trim();
-      if (!trimmedSegment) {
-        return;
-      }
-
-      const nextCanonical = canonicalSpeechSegment(trimmedSegment);
-      if (!nextCanonical) {
-        return;
-      }
-
-      const lastSegment = finalSegments[finalSegments.length - 1];
-      const lastCanonical = lastSegment ? canonicalSpeechSegment(lastSegment) : "";
-
-      if (lastCanonical === nextCanonical) {
-        return;
-      }
-
-      if (lastCanonical && nextCanonical.includes(lastCanonical)) {
-        finalSegments[finalSegments.length - 1] = trimmedSegment;
-        return;
-      }
-
-      if (lastCanonical && lastCanonical.includes(nextCanonical)) {
-        return;
-      }
-
-      const hasExistingMatch = finalSegments.some((entry) => canonicalSpeechSegment(entry) === nextCanonical);
-      if (hasExistingMatch) {
-        return;
-      }
-
-      finalSegments.push(trimmedSegment);
-    }
+    recognition.maxAlternatives = 5;
 
     setPay("");
     setMinutesDigits("");
@@ -732,18 +785,12 @@ export default function App() {
     voiceTranscriptRef.current = "";
 
     recognition.onresult = (event) => {
-      let interimTranscript = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const chunk = (event.results[index][0].transcript || "").trim();
-        if (event.results[index].isFinal) {
-          appendFinalSegment(chunk);
-        } else {
-          interimTranscript = chunk;
-        }
-      }
+      const currentTranscript = Array.from(event.results)
+        .map((result) => chooseBestRecognitionTranscript(result))
+        .filter(Boolean)
+        .join(" ")
+        .trim();
 
-      const combinedFinal = finalSegments.join(" ").trim();
-      const currentTranscript = `${combinedFinal} ${interimTranscript}`.trim();
       if (currentTranscript) {
         voiceTranscriptRef.current = currentTranscript;
       }
@@ -778,7 +825,7 @@ export default function App() {
       setIsListening(false);
       setVoiceStatus("processing");
 
-      const transcript = finalSegments.join(" ").trim() || (voiceTranscriptRef.current || "").trim();
+      const transcript = (voiceTranscriptRef.current || "").trim();
       if (!transcript) {
         setVoiceStatus("idle");
         return;
