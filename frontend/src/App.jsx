@@ -629,6 +629,7 @@ export default function App() {
   const voiceTranscriptRef = useRef("");
   const voiceStepRef = useRef("pay");
   const voiceCapturedRef = useRef({ pay: 0, minutes: 0, miles: 0 });
+  const voiceCompletedRef = useRef(false);
 
   const minutes = minutesDigits;
   const parsedBufferPercent = Number(bufferPercent);
@@ -849,6 +850,7 @@ export default function App() {
     voiceTranscriptRef.current = "";
     voiceStepRef.current = "pay";
     voiceCapturedRef.current = { pay: 0, minutes: 0, miles: 0 };
+    voiceCompletedRef.current = false;
     payInputRef.current?.focus();
 
     recognition.onresult = (event) => {
@@ -896,7 +898,11 @@ export default function App() {
         voiceCapturedRef.current.miles = milesValue;
         setMiles(sanitizeDecimalInput(String(milesValue), MILES_LIMIT));
         setHeardText(`Miles captured: ${milesValue}. Calculating...`);
+        voiceCompletedRef.current = true;
+        clearVoiceTimer();
+        setIsListening(false);
         setVoiceStatus("calculating");
+        milesInputRef.current?.blur();
         recognition.stop();
         return;
       }
@@ -911,6 +917,10 @@ export default function App() {
     recognition.onerror = (event) => {
       clearVoiceTimer();
       setIsListening(false);
+      if (voiceCompletedRef.current) {
+        setVoiceStatus("calculating");
+        return;
+      }
       setVoiceStatus("idle");
       if (event?.error === "not-allowed" || event?.error === "service-not-allowed") {
         setHeardText("Microphone blocked. Allow mic access for this site.");
@@ -930,6 +940,16 @@ export default function App() {
     recognition.onend = () => {
       clearVoiceTimer();
       setIsListening(false);
+
+      if (voiceCompletedRef.current) {
+        setHeardText(
+          `$${voiceCapturedRef.current.pay} ${voiceCapturedRef.current.minutes} minutes ${voiceCapturedRef.current.miles} miles`
+        );
+        setVoiceStatus("calculating");
+        milesInputRef.current?.blur();
+        return;
+      }
+
       const missingFields = getMissingVoiceFields();
       if (!missingFields.length) {
         setHeardText(
@@ -1008,7 +1028,7 @@ export default function App() {
                     ? "Status: Processing voice..."
                     : voiceStatus === "calculating"
                       ? "Status: Calculating..."
-                      : "Status: Ready"}
+                      : ""}
               </div>
               {!speechRecognitionSupported ? <div className="voice-heard">Voice input not supported in this browser.</div> : null}
 
@@ -1074,7 +1094,7 @@ export default function App() {
           </div>
 
           <div className="voice-tip-bottom">
-            Voice Tip: State your pay, minutes, then miles. Example: " 7 dollars, 15 minutes, 6 miles."
+            Voice Tip: Say one value at a time when prompted — pay, then minutes, then miles.
           </div>
 
           <div className="donate-row donate-mobile">
