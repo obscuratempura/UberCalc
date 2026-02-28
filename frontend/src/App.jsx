@@ -6,7 +6,7 @@ const PAY_LIMIT = 4;
 const MILES_LIMIT = 3;
 const MINUTES_LIMIT = 2;
 const DEFAULT_BUFFER_PERCENT = 15;
-const VOICE_SILENCE_TIMEOUT_MS = 2250;
+const VOICE_SILENCE_TIMEOUT_MS = 5000;
 
 const SMALL_NUMBERS = {
   zero: 0,
@@ -627,6 +627,8 @@ export default function App() {
   const milesInputRef = useRef(null);
   const voiceTimerRef = useRef(null);
   const voiceTranscriptRef = useRef("");
+  const voiceStepRef = useRef("pay");
+  const voiceCapturedRef = useRef({ pay: 0, minutes: 0, miles: 0 });
 
   const minutes = minutesDigits;
   const parsedBufferPercent = Number(bufferPercent);
@@ -763,6 +765,50 @@ export default function App() {
     setMiles(sanitizeDecimalInput(String(milesValue), MILES_LIMIT));
   }
 
+  function parseValueForVoiceStep(step, transcript) {
+    if (!transcript) {
+      return NaN;
+    }
+
+    if (step === "pay") {
+      const payValue = parsePay(transcript);
+      if (Number.isFinite(payValue) && payValue > 0) {
+        return Math.trunc(payValue);
+      }
+
+      const fallback = parseGeneralNumber(transcript);
+      if (Number.isFinite(fallback) && fallback > 0) {
+        return Math.trunc(fallback);
+      }
+      return NaN;
+    }
+
+    const generalValue = parseGeneralNumber(transcript);
+    if (!Number.isFinite(generalValue) || generalValue <= 0) {
+      return NaN;
+    }
+
+    if (step === "minutes") {
+      return Math.round(generalValue);
+    }
+
+    return generalValue;
+  }
+
+  function getMissingVoiceFields() {
+    const missing = [];
+    if (!voiceCapturedRef.current.pay) {
+      missing.push("pay");
+    }
+    if (!voiceCapturedRef.current.minutes) {
+      missing.push("minutes");
+    }
+    if (!voiceCapturedRef.current.miles) {
+      missing.push("miles");
+    }
+    return missing;
+  }
+
   function clearVoiceTimer() {
     if (voiceTimerRef.current) {
       window.clearTimeout(voiceTimerRef.current);
@@ -789,8 +835,8 @@ export default function App() {
 
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.interimResults = false;
     recognition.maxAlternatives = 5;
 
     setPay("");
@@ -799,16 +845,62 @@ export default function App() {
     setResult(null);
     setIsListening(true);
     setVoiceStatus("listening");
-    setHeardText("-");
+    setHeardText("Listening for pay amount...");
     voiceTranscriptRef.current = "";
+    voiceStepRef.current = "pay";
+    voiceCapturedRef.current = { pay: 0, minutes: 0, miles: 0 };
+    payInputRef.current?.focus();
 
     recognition.onresult = (event) => {
-      const latestResult = event.results[event.results.length - 1];
-      const currentTranscript = chooseBestRecognitionTranscript(latestResult);
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (!result?.isFinal) {
+          continue;
+        }
 
-      if (currentTranscript) {
+        const currentTranscript = chooseBestRecognitionTranscript(result);
+        if (!currentTranscript) {
+          continue;
+        }
+
         voiceTranscriptRef.current = currentTranscript;
+        const step = voiceStepRef.current;
+        const parsedValue = parseValueForVoiceStep(step, currentTranscript);
+
+        if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+          setHeardText(`Didn't catch ${step}. Please say ${step} again.`);
+          continue;
+        }
+
+        if (step === "pay") {
+          const payValue = Math.trunc(parsedValue);
+          voiceCapturedRef.current.pay = payValue;
+          setPay(sanitizeDecimalInput(String(payValue), PAY_LIMIT));
+          voiceStepRef.current = "minutes";
+          minutesInputRef.current?.focus();
+          setHeardText(`Pay captured: $${payValue}. Now say minutes.`);
+          continue;
+        }
+
+        if (step === "minutes") {
+          const minutesValue = Math.round(parsedValue);
+          voiceCapturedRef.current.minutes = minutesValue;
+          setMinutesDigits(sanitizeIntegerInput(String(minutesValue), MINUTES_LIMIT));
+          voiceStepRef.current = "miles";
+          milesInputRef.current?.focus();
+          setHeardText(`Minutes captured: ${minutesValue}. Now say miles.`);
+          continue;
+        }
+
+        const milesValue = parsedValue;
+        voiceCapturedRef.current.miles = milesValue;
+        setMiles(sanitizeDecimalInput(String(milesValue), MILES_LIMIT));
+        setHeardText(`Miles captured: ${milesValue}. Calculating...`);
+        setVoiceStatus("calculating");
+        recognition.stop();
+        return;
       }
+
       startVoiceSilenceTimer(recognition);
     };
 
@@ -838,29 +930,25 @@ export default function App() {
     recognition.onend = () => {
       clearVoiceTimer();
       setIsListening(false);
-      setVoiceStatus("processing");
-
-      const transcript = (voiceTranscriptRef.current || "").trim();
-      if (!transcript) {
-        setVoiceStatus("idle");
+      const missingFields = getMissingVoiceFields();
+      if (!missingFields.length) {
+        setHeardText(
+          `$${voiceCapturedRef.current.pay} ${voiceCapturedRef.current.minutes} minutes ${voiceCapturedRef.current.miles} miles`
+        );
+        setVoiceStatus("calculating");
         return;
       }
 
-      setHeardText(transcript);
-      const parsed = parseVoiceOrder(transcript);
-      if (!parsed) {
-        setHeardText("Could not parse order.");
-        setVoiceStatus("idle");
+      setVoiceStatus("idle");
+      if (!voiceTranscriptRef.current) {
+        setHeardText("No speech detected. Try again.");
         return;
       }
-
-      setHeardText(`$${parsed.pay} ${parsed.minutes} minutes ${parsed.miles} miles`);
-
-      fillFieldsFromVoice(parsed.pay, parsed.minutes, parsed.miles);
-      setVoiceStatus("calculating");
+      setHeardText(`Stopped before finishing. Missing: ${missingFields.join(", ")}.`);
     };
 
     recognition.start();
+    startVoiceSilenceTimer(recognition);
   }
 
   function decisionClass(decision) {
