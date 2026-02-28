@@ -630,6 +630,7 @@ export default function App() {
   const voiceStepRef = useRef("pay");
   const voiceCapturedRef = useRef({ pay: 0, minutes: 0, miles: 0 });
   const voiceCompletedRef = useRef(false);
+  const voiceStatusRef = useRef("idle");
 
   const minutes = minutesDigits;
   const parsedBufferPercent = Number(bufferPercent);
@@ -644,6 +645,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    voiceStatusRef.current = voiceStatus;
+  }, [voiceStatus]);
+
+  useEffect(() => {
     const timeout = window.setTimeout(async () => {
       const parsedPay = toNumberOrZero(pay);
       const parsedMinutes = toNumberOrZero(minutesDigits);
@@ -652,7 +657,7 @@ export default function App() {
       if (!parsedPay || !parsedMinutes || !parsedMiles) {
         setApiIssue("");
         setResult(null);
-        if (voiceStatus === "calculating") {
+        if (voiceStatusRef.current === "calculating") {
           setVoiceStatus("idle");
         }
         return;
@@ -688,14 +693,14 @@ export default function App() {
         const payload = await response.json();
         setApiIssue("");
         setResult(payload);
-        if (voiceStatus === "calculating") {
+        if (voiceStatusRef.current === "calculating") {
           setVoiceStatus("idle");
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to reach API";
         setApiIssue(`Cannot reach ${API_BASE} (${message})`);
         setResult(null);
-        if (voiceStatus === "calculating") {
+        if (voiceStatusRef.current === "calculating") {
           setVoiceStatus("idle");
         }
       }
