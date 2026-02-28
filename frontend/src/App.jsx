@@ -600,6 +600,36 @@ function chooseBestRecognitionTranscript(result) {
   return (result[0]?.transcript || "").trim();
 }
 
+function calculateLocalResult(payload) {
+  const effectiveMinutes = payload.minutes * payload.time_buffer_multiplier;
+
+  let effectivePay = payload.pay;
+  if (payload.advanced_mode) {
+    const fuelCost = (payload.miles / payload.miles_per_gallon) * payload.gas_price_per_gallon;
+    const wearCost = payload.miles * payload.cost_per_mile;
+    effectivePay = Math.max(payload.pay - fuelCost - wearCost, 0);
+  }
+
+  const hourlyRate = effectiveMinutes > 0 ? (effectivePay / effectiveMinutes) * 60 : 0;
+  const dollarsPerMile = payload.miles > 0 ? effectivePay / payload.miles : 0;
+
+  let decision = "DECLINE";
+  if (payload.pay >= payload.guaranteed_take_pay && hourlyRate >= payload.target_hourly) {
+    decision = "TAKE";
+  } else if (hourlyRate >= payload.target_hourly && dollarsPerMile >= payload.min_per_mile) {
+    decision = "TAKE";
+  } else if (hourlyRate >= payload.target_hourly * 0.85) {
+    decision = "ONLY_IF_SLOW";
+  }
+
+  return {
+    hourly_rate: Number(hourlyRate.toFixed(2)),
+    dollars_per_mile: Number(dollarsPerMile.toFixed(2)),
+    score: 0,
+    decision,
+  };
+}
+
 export default function App() {
   const [pay, setPay] = useState("");
   const [minutesDigits, setMinutesDigits] = useState("");
@@ -663,46 +693,48 @@ export default function App() {
         return;
       }
 
+      const calculatePayload = {
+        pay: parsedPay,
+        minutes: parsedMinutes,
+        miles: parsedMiles,
+        target_hourly: toNumberOrZero(targetHourly),
+        min_per_mile: toNumberOrZero(minPerMile),
+        guaranteed_take_pay: toNumberOrZero(guaranteedTakePay),
+        time_buffer_multiplier: activeBufferMultiplier,
+        advanced_mode: advancedMode,
+        miles_per_gallon: toNumberOrZero(milesPerGallon),
+        gas_price_per_gallon: toNumberOrZero(gasPricePerGallon),
+        cost_per_mile: toNumberOrZero(costPerMile),
+      };
+
+      const localResult = calculateLocalResult(calculatePayload);
+      setApiIssue("");
+      setResult(localResult);
+      if (voiceStatusRef.current === "calculating") {
+        setVoiceStatus("idle");
+      }
+
       try {
+        const controller = new AbortController();
+        const requestTimeout = window.setTimeout(() => controller.abort(), 6000);
+
         const response = await fetch(`${API_BASE}/calculate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            pay: parsedPay,
-            minutes: parsedMinutes,
-            miles: parsedMiles,
-            target_hourly: toNumberOrZero(targetHourly),
-            min_per_mile: toNumberOrZero(minPerMile),
-            guaranteed_take_pay: toNumberOrZero(guaranteedTakePay),
-            time_buffer_multiplier: activeBufferMultiplier,
-            advanced_mode: advancedMode,
-            miles_per_gallon: toNumberOrZero(milesPerGallon),
-            gas_price_per_gallon: toNumberOrZero(gasPricePerGallon),
-            cost_per_mile: toNumberOrZero(costPerMile),
-          }),
+          body: JSON.stringify(calculatePayload),
+          signal: controller.signal,
         });
+        window.clearTimeout(requestTimeout);
 
         if (!response.ok) {
-          const responseBody = await response.text();
-          const responsePreview = responseBody ? ` ${responseBody.slice(0, 120)}` : "";
-          setApiIssue(`API ${response.status}.${responsePreview}`.trim());
-          setResult(null);
           return;
         }
 
         const payload = await response.json();
         setApiIssue("");
         setResult(payload);
-        if (voiceStatusRef.current === "calculating") {
-          setVoiceStatus("idle");
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unable to reach API";
-        setApiIssue(`Cannot reach ${API_BASE} (${message})`);
-        setResult(null);
-        if (voiceStatusRef.current === "calculating") {
-          setVoiceStatus("idle");
-        }
+      } catch {
+        // Keep local result when API is slow or unavailable.
       }
     }, 80);
 
