@@ -612,9 +612,14 @@ function calculateLocalResult(payload) {
 
   const hourlyRate = effectiveMinutes > 0 ? (effectivePay / effectiveMinutes) * 60 : 0;
   const dollarsPerMile = payload.miles > 0 ? effectivePay / payload.miles : 0;
+  const isStackOrder = payload.order_mode === "stack";
 
   let decision = "DECLINE";
-  if (payload.pay >= payload.guaranteed_take_pay && hourlyRate >= payload.target_hourly) {
+  if (isStackOrder) {
+    if (hourlyRate >= payload.target_hourly) {
+      decision = "TAKE";
+    }
+  } else if (payload.pay >= payload.guaranteed_take_pay && hourlyRate >= payload.target_hourly) {
     decision = "TAKE";
   } else if (hourlyRate >= payload.target_hourly && dollarsPerMile >= payload.min_per_mile) {
     decision = "TAKE";
@@ -634,6 +639,7 @@ export default function App() {
   const [pay, setPay] = useState("");
   const [minutesDigits, setMinutesDigits] = useState("");
   const [miles, setMiles] = useState("");
+  const [orderMode, setOrderMode] = useState("regular");
   const [targetHourly, setTargetHourly] = useState("24");
   const [minPerMile, setMinPerMile] = useState("1.50");
   const [guaranteedTakePay, setGuaranteedTakePay] = useState("10");
@@ -697,6 +703,7 @@ export default function App() {
         pay: parsedPay,
         minutes: parsedMinutes,
         miles: parsedMiles,
+        order_mode: orderMode,
         target_hourly: toNumberOrZero(targetHourly),
         min_per_mile: toNumberOrZero(minPerMile),
         guaranteed_take_pay: toNumberOrZero(guaranteedTakePay),
@@ -712,6 +719,10 @@ export default function App() {
       setResult(localResult);
       if (voiceStatusRef.current === "calculating") {
         setVoiceStatus("idle");
+      }
+
+      if (orderMode === "stack") {
+        return;
       }
 
       try {
@@ -747,6 +758,7 @@ export default function App() {
     targetHourly,
     minPerMile,
     guaranteedTakePay,
+    orderMode,
     activeBufferMultiplier,
     advancedMode,
     milesPerGallon,
@@ -861,7 +873,7 @@ export default function App() {
     }, VOICE_SILENCE_TIMEOUT_MS);
   }
 
-  function handleVoiceInput() {
+  function handleVoiceInput(mode = "regular") {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition || isListening) {
       if (!SpeechRecognition) {
@@ -881,9 +893,10 @@ export default function App() {
     setMinutesDigits("");
     setMiles("");
     setResult(null);
+    setOrderMode(mode);
     setIsListening(true);
     setVoiceStatus("listening");
-    setHeardText("Listening for pay amount...");
+    setHeardText(mode === "stack" ? "Listening for added pay amount..." : "Listening for pay amount...");
     voiceTranscriptRef.current = "";
     voiceStepRef.current = "pay";
     voiceCapturedRef.current = { pay: 0, minutes: 0, miles: 0 };
@@ -917,7 +930,9 @@ export default function App() {
           setPay(sanitizeDecimalInput(String(payValue), PAY_LIMIT));
           voiceStepRef.current = "minutes";
           minutesInputRef.current?.focus();
-          setHeardText(`Pay captured: $${payValue}. Now say minutes.`);
+          setHeardText(
+            mode === "stack" ? `Added pay captured: $${payValue}. Now say added minutes.` : `Pay captured: $${payValue}. Now say minutes.`
+          );
           continue;
         }
 
@@ -927,14 +942,22 @@ export default function App() {
           setMinutesDigits(sanitizeIntegerInput(String(minutesValue), MINUTES_LIMIT));
           voiceStepRef.current = "miles";
           milesInputRef.current?.focus();
-          setHeardText(`Minutes captured: ${minutesValue}. Now say miles.`);
+          setHeardText(
+            mode === "stack"
+              ? `Added minutes captured: ${minutesValue}. Now say added ${distanceUnit === "km" ? "kilometers" : "miles"}.`
+              : `Minutes captured: ${minutesValue}. Now say ${distanceUnit === "km" ? "kilometers" : "miles"}.`
+          );
           continue;
         }
 
         const milesValue = parsedValue;
         voiceCapturedRef.current.miles = milesValue;
         setMiles(sanitizeDecimalInput(String(milesValue), MILES_LIMIT));
-        setHeardText(`Miles captured: ${milesValue}. Calculating...`);
+        setHeardText(
+          mode === "stack"
+            ? `Added ${distanceUnit === "km" ? "kilometers" : "miles"} captured: ${milesValue}. Calculating stack...`
+            : `${distanceUnit === "km" ? "Kilometers" : "Miles"} captured: ${milesValue}. Calculating...`
+        );
         voiceCompletedRef.current = true;
         clearVoiceTimer();
         setIsListening(false);
@@ -1019,6 +1042,16 @@ export default function App() {
   }
 
   function decisionLabel(decision) {
+    if (orderMode === "stack") {
+      if (decision === "TAKE") {
+        return "STACK: TAKE";
+      }
+      if (decision === "DECLINE") {
+        return "STACK: DECLINE";
+      }
+      return "STACK: WAITING";
+    }
+
     if (decision === "TAKE") {
       return "TAKE IT";
     }
@@ -1054,8 +1087,11 @@ export default function App() {
         <div className="window-body">
           <div className="layout-split">
             <section className="left-panel">
-              <button type="button" className="voice-button" onClick={handleVoiceInput} disabled={isListening}>
+              <button type="button" className="voice-button" onClick={() => handleVoiceInput("regular")} disabled={isListening}>
                 {isListening ? "🎤 LISTENING..." : "🎤 VOICE ORDER"}
+              </button>
+              <button type="button" className="voice-button" onClick={() => handleVoiceInput("stack")} disabled={isListening}>
+                {isListening ? "🎤 LISTENING..." : "🎤 VOICE STACK ORDER"}
               </button>
               <div className="voice-heard">Heard: {heardText || "-"}</div>
               <div className="voice-status">
@@ -1131,7 +1167,7 @@ export default function App() {
           </div>
 
           <div className="voice-tip-bottom">
-            Voice Tip: Say one value at a time when prompted — pay, then minutes, then miles.
+            Voice Tip: Voice Order = full order. Voice Stack Order = added pay, added minutes, added {distanceUnit === "km" ? "kilometers" : "miles"}.
           </div>
 
           <div className="donate-row donate-mobile">
