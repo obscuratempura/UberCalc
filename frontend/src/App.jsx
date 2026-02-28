@@ -263,9 +263,9 @@ function parseGeneralNumber(phrase) {
     return fractional;
   }
 
-  const numericMatch = cleaned.match(/\d+(?:\.\d+)?/);
-  if (numericMatch) {
-    return Number(numericMatch[0]);
+  const numericMatches = cleaned.match(/\d+(?:\.\d+)?/g);
+  if (numericMatches?.length) {
+    return Number(numericMatches[numericMatches.length - 1]);
   }
 
   if (cleaned.includes("point")) {
@@ -407,6 +407,24 @@ function collectNumberChunks(tokens) {
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
     if (isNumericToken(token) || token === "point") {
+      if (currentTokens.length) {
+        const previousToken = currentTokens[currentTokens.length - 1];
+        const currentIsNumericDigits = /^\d+(?:\.\d+)?$/.test(token);
+        const previousIsNumericDigits = /^\d+(?:\.\d+)?$/.test(previousToken);
+        const splitAdjacentDigitNumbers =
+          token !== "point" &&
+          previousToken !== "point" &&
+          currentIsNumericDigits &&
+          previousIsNumericDigits;
+
+        if (splitAdjacentDigitNumbers) {
+          flushChunk(index - 1);
+          chunkStart = index;
+          currentTokens = [token];
+          continue;
+        }
+      }
+
       if (chunkStart < 0) {
         chunkStart = index;
       }
@@ -785,11 +803,8 @@ export default function App() {
     voiceTranscriptRef.current = "";
 
     recognition.onresult = (event) => {
-      const currentTranscript = Array.from(event.results)
-        .map((result) => chooseBestRecognitionTranscript(result))
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+      const latestResult = event.results[event.results.length - 1];
+      const currentTranscript = chooseBestRecognitionTranscript(latestResult);
 
       if (currentTranscript) {
         voiceTranscriptRef.current = currentTranscript;
