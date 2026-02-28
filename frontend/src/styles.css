@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: "Segoe UI", Tahoma, sans-serif;
   font-size: 16px;
 }
@@ -10,8 +10,8 @@
 
 body {
   margin: 0;
-  color: #121212;
-  background: #f1f4f3;
+  color: #e9ecef;
+  background: #0f1216;
 }
 
 .desktop {
@@ -23,10 +23,10 @@ body {
 
 .window {
   width: min(100%, 1180px);
-  background: #ffffff;
-  border: 1px solid #d8dfdb;
+  background: #161b21;
+  border: 1px solid #2a323b;
   border-radius: 16px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 
@@ -34,11 +34,11 @@ body {
   min-height: 48px;
   display: flex;
   align-items: center;
-  background: #ffffff;
-  color: #111;
+  background: #12171d;
+  color: #f3f5f7;
   font-weight: 700;
   padding: 10px 16px;
-  border-bottom: 1px solid #e6ece8;
+  border-bottom: 1px solid #2a323b;
 }
 
 .window-body {
@@ -70,15 +70,15 @@ body {
   padding-top: 10px;
   padding-bottom: 10px;
   margin-bottom: 6px;
-  background: #111;
-  color: #fff;
-  border: 1px solid #111;
+  background: #27303a;
+  color: #f6f8fa;
+  border: 1px solid #394553;
   border-radius: 10px;
 }
 
 .voice-heard {
-  border: 1px solid #d6ddda;
-  background: #fff;
+  border: 1px solid #33404d;
+  background: #1c232b;
   min-height: 34px;
   padding: 6px 8px;
   font-size: 13px;
@@ -88,15 +88,15 @@ body {
 }
 
 .voice-status {
-  border: 1px solid #d6ddda;
-  background: #f7faf8;
+  border: 1px solid #33404d;
+  background: #1a242f;
   min-height: 30px;
   padding: 4px 8px;
   font-size: 12px;
   display: flex;
   align-items: center;
   border-radius: 10px;
-  color: #1f5f3b;
+  color: #79d5a6;
   font-weight: 600;
 }
 
@@ -115,9 +115,9 @@ label {
 
 input,
 button {
-  border: 1px solid #cfd7d3;
-  background: #fff;
-  color: #111;
+  border: 1px solid #394553;
+  background: #1a2028;
+  color: #edf1f5;
   font-family: inherit;
   font-size: 18px;
   min-height: 42px;
@@ -126,7 +126,7 @@ button {
 }
 
 button {
-  background: #ffffff;
+  background: #242d37;
   min-height: 40px;
   font-size: 15px;
   cursor: pointer;
@@ -138,7 +138,7 @@ button:active {
 }
 
 button:disabled {
-  color: #666;
+  color: #7f8a95;
   cursor: not-allowed;
 }
 
@@ -174,14 +174,14 @@ button:disabled {
 }
 
 .button-bar .button-group button {
-  background: #111;
-  color: #fff;
-  border-color: #111;
+  background: #313c49;
+  color: #f4f7fa;
+  border-color: #445364;
 }
 
 .voice-tip-bottom {
-  border: 1px solid #d6ddda;
-  background: #f8fbf9;
+  border: 1px solid #33404d;
+  background: #1a232d;
   min-height: 34px;
   padding: 6px 8px;
   font-size: 13px;
@@ -207,8 +207,8 @@ button:disabled {
 }
 
 .advanced-badge {
-  border: 1px solid #b9e4cc;
-  background: #effaf3;
+  border: 1px solid #2b7350;
+  background: #173726;
   min-height: 24px;
   padding: 2px 6px;
   font-size: 11px;
@@ -217,11 +217,11 @@ button:disabled {
   width: fit-content;
   font-weight: 700;
   border-radius: 8px;
-  color: #0f7a46;
+  color: #7bd8ab;
 }
 
 .result-zone {
-  border: 1px solid #d6ddda;
+  border: 1px solid #33404d;
   display: grid;
   place-content: center;
   gap: 26px;
@@ -233,19 +233,19 @@ button:disabled {
 }
 
 .result-zone.neutral-bg {
-  background: #f6f8f7;
+  background: #1a2128;
 }
 
 .result-zone.take-bg {
-  background: #eaf9f0;
+  background: #163125;
 }
 
 .result-zone.slow-bg {
-  background: #f5f1dd;
+  background: #383219;
 }
 
 .result-zone.decline-bg {
-  background: #fbeeee;
+  background: #3a1e1e;
 }
 
 .rate-hero {
@@ -262,21 +262,21 @@ button:disabled {
 }
 
 .decision-hero.take {
-  color: #0f8f52;
+  color: #79d9a8;
 }
 
 .decision-hero.slow {
-  color: #9a7b00;
+  color: #ffd86a;
 }
 
 .decision-hero.decline {
-  color: #b00000;
+  color: #ff8d8d;
 }
 
 .api-issue {
-  border: 1px solid #e0d0d0;
-  background: #fff;
-  color: #8b0000;
+  border: 1px solid #6c3a3a;
+  background: #2e1a1a;
+  color: #ffb8b8;
   padding: 8px;
   font-size: 13px;
   line-height: 1.3;
@@ -288,7 +288,7 @@ button:disabled {
 .prefs-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.56);
   display: grid;
   place-items: center;
   padding: 12px;
@@ -296,10 +296,10 @@ button:disabled {
 
 .prefs-window {
   width: min(100%, 460px);
-  background: #fff;
-  border: 1px solid #d8dfdb;
+  background: #161b21;
+  border: 1px solid #2d3742;
   border-radius: 14px;
-  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
@@ -317,8 +317,8 @@ button:disabled {
 
 .prefs-title {
   min-height: 40px;
-  background: #111;
-  color: #fff;
+  background: #111820;
+  color: #f3f6f9;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -339,9 +339,9 @@ button:disabled {
 }
 
 .prefs-grid select {
-  border: 1px solid #cfd7d3;
-  background: #fff;
-  color: #111;
+  border: 1px solid #394553;
+  background: #1a2028;
+  color: #edf1f5;
   font-family: inherit;
   font-size: 16px;
   min-height: 34px;
