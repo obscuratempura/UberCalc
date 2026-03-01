@@ -769,13 +769,20 @@ export default function App() {
   ]);
 
   function handleClear() {
-    if (isListening && voiceRecognitionRef.current) {
+    if (isListening || voiceRecognitionRef.current) {
       voiceCanceledRef.current = true;
       clearVoiceTimer();
       setIsListening(false);
       setVoiceStatus("idle");
-      voiceRecognitionRef.current.stop();
+      const activeRecognition = voiceRecognitionRef.current;
       voiceRecognitionRef.current = null;
+      if (activeRecognition) {
+        if (typeof activeRecognition.abort === "function") {
+          activeRecognition.abort();
+        } else {
+          activeRecognition.stop();
+        }
+      }
     }
     setPay("");
     setMinutesDigits("");
@@ -897,7 +904,11 @@ export default function App() {
       setIsListening(false);
       setVoiceStatus("idle");
       setHeardText("Voice canceled.");
-      voiceRecognitionRef.current.stop();
+      if (typeof voiceRecognitionRef.current.abort === "function") {
+        voiceRecognitionRef.current.abort();
+      } else {
+        voiceRecognitionRef.current.stop();
+      }
       voiceRecognitionRef.current = null;
       return;
     }
@@ -924,6 +935,10 @@ export default function App() {
     payInputRef.current?.focus();
 
     recognition.onresult = (event) => {
+      if (voiceCanceledRef.current) {
+        return;
+      }
+
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
         if (!result?.isFinal) {
@@ -991,12 +1006,20 @@ export default function App() {
     };
 
     recognition.onspeechstart = () => {
+      if (voiceCanceledRef.current) {
+        return;
+      }
       startVoiceSilenceTimer(recognition);
     };
 
     recognition.onerror = (event) => {
       clearVoiceTimer();
       setIsListening(false);
+      if (voiceCanceledRef.current) {
+        voiceCanceledRef.current = false;
+        setVoiceStatus("idle");
+        return;
+      }
       if (voiceCompletedRef.current) {
         setVoiceStatus("calculating");
         return;
