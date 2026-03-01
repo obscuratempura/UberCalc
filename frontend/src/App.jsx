@@ -601,10 +601,11 @@ function chooseBestRecognitionTranscript(result) {
 }
 
 function calculateLocalResult(payload) {
-  const effectiveMinutes = payload.minutes * payload.time_buffer_multiplier;
+  const isStackOrder = payload.order_mode === "stack";
+  const effectiveMinutes = isStackOrder ? payload.minutes : payload.minutes * payload.time_buffer_multiplier;
 
   let effectivePay = payload.pay;
-  if (payload.advanced_mode) {
+  if (!isStackOrder && payload.advanced_mode) {
     const fuelCost = (payload.miles / payload.miles_per_gallon) * payload.gas_price_per_gallon;
     const wearCost = payload.miles * payload.cost_per_mile;
     effectivePay = Math.max(payload.pay - fuelCost - wearCost, 0);
@@ -612,7 +613,6 @@ function calculateLocalResult(payload) {
 
   const hourlyRate = effectiveMinutes > 0 ? (effectivePay / effectiveMinutes) * 60 : 0;
   const dollarsPerMile = payload.miles > 0 ? effectivePay / payload.miles : 0;
-  const isStackOrder = payload.order_mode === "stack";
 
   let decision = "DECLINE";
   if (isStackOrder) {
