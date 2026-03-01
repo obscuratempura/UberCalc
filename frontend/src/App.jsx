@@ -667,6 +667,8 @@ export default function App() {
   const voiceCapturedRef = useRef({ pay: 0, minutes: 0, miles: 0 });
   const voiceCompletedRef = useRef(false);
   const voiceStatusRef = useRef("idle");
+  const voiceRecognitionRef = useRef(null);
+  const voiceCanceledRef = useRef(false);
 
   const minutes = minutesDigits;
   const parsedBufferPercent = Number(bufferPercent);
@@ -767,6 +769,14 @@ export default function App() {
   ]);
 
   function handleClear() {
+    if (isListening && voiceRecognitionRef.current) {
+      voiceCanceledRef.current = true;
+      clearVoiceTimer();
+      setIsListening(false);
+      setVoiceStatus("idle");
+      voiceRecognitionRef.current.stop();
+      voiceRecognitionRef.current = null;
+    }
     setPay("");
     setMinutesDigits("");
     setMiles("");
@@ -875,15 +885,25 @@ export default function App() {
 
   function handleVoiceInput(mode = "regular") {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition || isListening) {
-      if (!SpeechRecognition) {
-        setHeardText("Voice input not supported in this browser.");
-        setVoiceStatus("idle");
-      }
+    if (!SpeechRecognition) {
+      setHeardText("Voice input not supported in this browser.");
+      setVoiceStatus("idle");
+      return;
+    }
+
+    if (isListening && voiceRecognitionRef.current) {
+      voiceCanceledRef.current = true;
+      clearVoiceTimer();
+      setIsListening(false);
+      setVoiceStatus("idle");
+      setHeardText("Voice canceled.");
+      voiceRecognitionRef.current.stop();
+      voiceRecognitionRef.current = null;
       return;
     }
 
     const recognition = new SpeechRecognition();
+    voiceRecognitionRef.current = recognition;
     recognition.lang = "en-US";
     recognition.continuous = true;
     recognition.interimResults = false;
@@ -1000,6 +1020,13 @@ export default function App() {
     recognition.onend = () => {
       clearVoiceTimer();
       setIsListening(false);
+      voiceRecognitionRef.current = null;
+
+      if (voiceCanceledRef.current) {
+        voiceCanceledRef.current = false;
+        setVoiceStatus("idle");
+        return;
+      }
 
       if (voiceCompletedRef.current) {
         setHeardText(
@@ -1087,11 +1114,11 @@ export default function App() {
         <div className="window-body">
           <div className="layout-split">
             <section className="left-panel">
-              <button type="button" className="voice-button" onClick={() => handleVoiceInput("regular")} disabled={isListening}>
-                {isListening ? "🎤 LISTENING..." : "🎤 VOICE ORDER"}
+              <button type="button" className="voice-button" onClick={() => handleVoiceInput("regular")}>
+                {isListening ? "⏹ CANCEL VOICE" : "🎤 VOICE ORDER"}
               </button>
-              <button type="button" className="voice-button" onClick={() => handleVoiceInput("stack")} disabled={isListening}>
-                {isListening ? "🎤 LISTENING..." : "🎤 VOICE STACK ORDER"}
+              <button type="button" className="voice-button" onClick={() => handleVoiceInput("stack")}>
+                {isListening ? "⏹ CANCEL VOICE" : "🎤 VOICE STACK ORDER"}
               </button>
               <div className="voice-heard">Heard: {heardText || "-"}</div>
               <div className="voice-status">
