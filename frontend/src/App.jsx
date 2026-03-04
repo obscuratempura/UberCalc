@@ -1162,6 +1162,7 @@ export default function App() {
                   ref={payInputRef}
                   inputMode="decimal"
                   value={pay}
+                  autoComplete="off"
                   onChange={handlePayChange}
                   onKeyDown={(event) => onRowEnter(event, minutesInputRef)}
                   maxLength={5}
@@ -1174,6 +1175,7 @@ export default function App() {
                   ref={minutesInputRef}
                   inputMode="numeric"
                   value={minutes}
+                  autoComplete="off"
                   onChange={handleMinutesChange}
                   onKeyDown={(event) => onRowEnter(event, milesInputRef)}
                   maxLength={MINUTES_LIMIT}
@@ -1186,6 +1188,7 @@ export default function App() {
                   ref={milesInputRef}
                   inputMode="decimal"
                   value={miles}
+                  autoComplete="off"
                   onChange={handleMilesChange}
                   maxLength={4}
                   placeholder="0.0"
@@ -1256,6 +1259,7 @@ export default function App() {
                       id="pref-buffer"
                       inputMode="numeric"
                       value={bufferPercent}
+                        autoComplete="off"
                       onChange={(event) => setBufferPercent(event.target.value.replace(/[^\d.]/g, ""))}
                     />
 
@@ -1274,6 +1278,7 @@ export default function App() {
                       id="pref-target-hour"
                       inputMode="decimal"
                       value={targetHourly}
+                        autoComplete="off"
                       onChange={(event) => setTargetHourly(event.target.value.replace(/[^\d.]/g, ""))}
                     />
 
@@ -1282,6 +1287,7 @@ export default function App() {
                       id="pref-target-mile"
                       inputMode="decimal"
                       value={minPerMile}
+                        autoComplete="off"
                       onChange={(event) => setMinPerMile(event.target.value.replace(/[^\d.]/g, ""))}
                     />
 
@@ -1290,6 +1296,7 @@ export default function App() {
                       id="pref-guaranteed-pay"
                       inputMode="decimal"
                       value={guaranteedTakePay}
+                        autoComplete="off"
                       onChange={(event) => setGuaranteedTakePay(event.target.value.replace(/[^\d.]/g, ""))}
                     />
 
@@ -1311,6 +1318,7 @@ export default function App() {
                           id="pref-mpg"
                           inputMode="decimal"
                           value={milesPerGallon}
+                          autoComplete="off"
                           onChange={(event) => setMilesPerGallon(event.target.value.replace(/[^\d.]/g, ""))}
                         />
 
@@ -1319,6 +1327,7 @@ export default function App() {
                           id="pref-gas"
                           inputMode="decimal"
                           value={gasPricePerGallon}
+                          autoComplete="off"
                           onChange={(event) => setGasPricePerGallon(event.target.value.replace(/[^\d.]/g, ""))}
                         />
 
@@ -1327,6 +1336,7 @@ export default function App() {
                           id="pref-cpm"
                           inputMode="decimal"
                           value={costPerMile}
+                          autoComplete="off"
                           onChange={(event) => setCostPerMile(event.target.value.replace(/[^\d.]/g, ""))}
                         />
                       </>
