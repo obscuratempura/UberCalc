@@ -8,6 +8,38 @@ const MINUTES_LIMIT = 2;
 const DEFAULT_BUFFER_PERCENT = 15;
 const VOICE_SILENCE_TIMEOUT_MS = 5000;
 
+// Simple programmatic beeps (no external assets) to cue voice steps
+let _audioCtx = null;
+function playBeep(freq = 880, duration = 120, type = "sine", volume = 0.12) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!_audioCtx) _audioCtx = new AudioCtx();
+    const o = _audioCtx.createOscillator();
+    const g = _audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = volume;
+    o.connect(g);
+    g.connect(_audioCtx.destination);
+    o.start();
+    setTimeout(() => {
+      try {
+        o.stop();
+      } catch (e) {
+        // ignore
+      }
+    }, duration);
+  } catch (e) {
+    // ignore audio errors
+  }
+}
+
+function playDoubleBeep() {
+  playBeep(880, 120);
+  setTimeout(() => playBeep(1200, 120), 180);
+}
+
 const SMALL_NUMBERS = {
   zero: 0,
   one: 1,
@@ -928,6 +960,8 @@ export default function App() {
     setIsListening(true);
     setVoiceStatus("listening");
     setHeardText(mode === "stack" ? "Listening for added pay amount..." : "Listening for pay amount...");
+    // Play start cue (user gesture from button click allows AudioContext resume)
+    playBeep(mode === "stack" ? 700 : 880, 160);
     voiceTranscriptRef.current = "";
     voiceStepRef.current = "pay";
     voiceCapturedRef.current = { pay: 0, minutes: 0, miles: 0 };
@@ -968,6 +1002,8 @@ export default function App() {
           setHeardText(
             mode === "stack" ? `Added pay captured: $${payValue}. Now say added minutes.` : `Pay captured: $${payValue}. Now say minutes.`
           );
+          // cue for next input
+          playBeep(1100, 100);
           continue;
         }
 
@@ -982,6 +1018,8 @@ export default function App() {
               ? `Added minutes captured: ${minutesValue}. Now say added ${distanceUnit === "km" ? "kilometers" : "miles"}.`
               : `Minutes captured: ${minutesValue}. Now say ${distanceUnit === "km" ? "kilometers" : "miles"}.`
           );
+          // cue for next input
+          playBeep(1400, 100);
           continue;
         }
 
@@ -994,6 +1032,8 @@ export default function App() {
             : `${distanceUnit === "km" ? "Kilometers" : "Miles"} captured: ${milesValue}. Calculating...`
         );
         voiceCompletedRef.current = true;
+        // completion cue
+        playDoubleBeep();
         clearVoiceTimer();
         setIsListening(false);
         setVoiceStatus("calculating");
