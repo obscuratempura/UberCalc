@@ -15,21 +15,43 @@ function playBeep(freq = 880, duration = 120, type = "sine", volume = 0.12) {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     if (!_audioCtx) _audioCtx = new AudioCtx();
-    const o = _audioCtx.createOscillator();
-    const g = _audioCtx.createGain();
-    o.type = type;
-    o.frequency.value = freq;
-    g.gain.value = volume;
-    o.connect(g);
-    g.connect(_audioCtx.destination);
-    o.start();
-    setTimeout(() => {
+
+    const startOsc = () => {
       try {
-        o.stop();
+        const o = _audioCtx.createOscillator();
+        const g = _audioCtx.createGain();
+        o.type = type;
+        o.frequency.value = freq;
+        g.gain.value = volume;
+        o.connect(g);
+        g.connect(_audioCtx.destination);
+        o.start();
+        const stopId = setTimeout(() => {
+          try {
+            o.stop();
+          } catch (e) {
+            // ignore
+          }
+          try {
+            o.disconnect();
+            g.disconnect();
+          } catch (e) {
+            // ignore
+          }
+          clearTimeout(stopId);
+        }, duration);
       } catch (e) {
         // ignore
       }
-    }, duration);
+    };
+
+    // Some browsers require the context to be resumed after a user gesture.
+    if (_audioCtx.state === "suspended") {
+      _audioCtx.resume().then(startOsc).catch(startOsc);
+      return;
+    }
+
+    startOsc();
   } catch (e) {
     // ignore audio errors
   }
